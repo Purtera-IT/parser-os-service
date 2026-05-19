@@ -1,0 +1,738 @@
+{
+  "version": "scope_process_v1",
+  "currentStep": 3,
+  "projectNeeds": {
+    "active_domains": [
+      "managed_services",
+      "physical_security"
+    ],
+    "notes": "Acme Corp multi-site Axis rollout — prioritize North DC loading lanes; reconcile quote vs roster before final labor load.",
+    "quote_type": "fixed_fee_rollout",
+    "product_types": [
+      "video_surveillance",
+      "structured_cabling"
+    ],
+    "skillsets": [
+      "low_voltage",
+      "bucket_truck_optional"
+    ],
+    "sub_domain_selections": {
+      "video_surveillance": [
+        "cam_ip_fixed",
+        "cam_ip_dome"
+      ]
+    },
+    "complexity": {
+      "multi_site": true,
+      "after_hours": true,
+      "customer_provides_materials": false,
+      "scope_ambiguous": true,
+      "lift_required": false,
+      "custom_flag": false,
+      "custom_flag_text": "",
+      "restricted_access": true,
+      "floorplans_available": true
+    },
+    "search_profile": {
+      "keywords": [
+        "IP camera",
+        "Axis P3245",
+        "PoE",
+        "CAT6",
+        "ceiling mount",
+        "escort"
+      ],
+      "domain_hints": [
+        "physical_security",
+        "structured_cabling",
+        "access_control_coordination"
+      ],
+      "field_families": [
+        "site_access",
+        "camera_inventory",
+        "power_and_pathways"
+      ]
+    },
+    "site_list": [
+      {
+        "name": "North Distribution Center",
+        "address": "1200 Logistics Parkway NE",
+        "city": "Atlanta",
+        "state": "GA",
+        "zip": "30318",
+        "country": "US",
+        "building_type": "warehouse_distribution",
+        "planned_camera_count": 35
+      },
+      {
+        "name": "South Warehouse",
+        "address": "4500 Industrial Boulevard",
+        "city": "Tampa",
+        "state": "FL",
+        "zip": "33605",
+        "country": "US",
+        "building_type": "warehouse_manufacturing",
+        "planned_camera_count": 28
+      },
+      {
+        "name": "Main Office",
+        "address": "88 Retail Plaza Drive",
+        "city": "Atlanta",
+        "state": "GA",
+        "zip": "30309",
+        "country": "US",
+        "building_type": "corporate_headquarters",
+        "planned_camera_count": 28
+      }
+    ]
+  },
+  "selectedArtifacts": {
+    "calls": [
+      "00000000-0000-4000-8000-000000000301"
+    ],
+    "emails": [
+      "00000000-0000-4000-8000-000000000302"
+    ],
+    "docs": [
+      "00000000-0000-4000-8000-000000000201",
+      "00000000-0000-4000-8000-000000000202"
+    ],
+    "notes": [
+      "00000000-0000-4000-8000-000000000401"
+    ]
+  },
+  "orbitbriefAudit": {
+    "missing": [
+      "Ceiling construction type for South Warehouse not stated — impacts dome mount hardware and cable pathways.",
+      "Available electrical capacity at North Distribution Center MDP not documented for incremental PoE switches.",
+      "pkt_missing_ceiling",
+      "pkt_power_audit"
+    ],
+    "risk": [
+      "quantity_mismatch",
+      "scope_text_conflict",
+      "missing_ceiling_spec",
+      "electrical_capacity_unknown"
+    ],
+    "confidence": {
+      "overall": 0.81,
+      "atoms_weighted": 0.84,
+      "receipts_verified_ratio": 0.78
+    },
+    "reasonMap": {
+      "pkt_a1b2c3d4": "existence_reason: narrative_claim from customer_email_4-15.eml thread — West Wing inclusion",
+      "pkt_f00dcafe": "existence_reason: superseding directive same thread — West Wing exclusion",
+      "pkt_91ca72ff": "existence_reason: cross_document_numeric_delta roster vs quote",
+      "pkt_missing_ceiling": "existence_reason: site_walk photos inconclusive for ceiling tile type"
+    },
+    "evidenceMap": {
+      "camera_count_total": [
+        {
+          "text": "Sum of billable camera positions = 91",
+          "source": "approved_site_roster.xlsx"
+        },
+        {
+          "text": "South Warehouse tab subtotal 28 positions",
+          "source": "approved_site_roster.xlsx"
+        }
+      ],
+      "vendor_quote_camera_qty": [
+        {
+          "text": "CAM-BUNDLE-STD quantity 72 @ $185000.00 USD extended",
+          "source": "vendor_quote_axis_v2.pdf"
+        }
+      ],
+      "scope.west_wing": [
+        {
+          "text": "Please include West Wing coverage in the camera rollout.",
+          "source": "customer_email_4-15.eml"
+        },
+        {
+          "text": "Remove West Wing from scope effective immediately per security leadership.",
+          "source": "customer_email_4-15.eml"
+        }
+      ],
+      "meeting.decisions.axis_model": [
+        {
+          "text": "Axis P3245 model confirmed for standardized fleet.",
+          "source": "meeting_transcript_4-15.vtt"
+        }
+      ]
+    },
+    "artifactArchive": {
+      "runRef": "run_00000000-0000-4000-8000-000000000010",
+      "manifestBlobPath": "deals/00000000-0000-0000-0000-000000000001/runs/00000000-0000-0000-0000-000000000010/manifest.json",
+      "manifestReadUrl": "https://example.blob.core.windows.net/orbitbrief-artifacts/deals/00000000-0000-0000-0000-000000000001/runs/00000000-0000-0000-0000-000000000010/manifest.json",
+      "savedAt": "2026-04-29T18:45:12.000Z"
+    },
+    "learning": {}
+  },
+  "extractedReview": {
+    "reviewMode": "cross_site",
+    "globalFields": {
+      "camera_positions_total": {
+        "value": 91,
+        "value_type": "integer",
+        "status": "needs_review",
+        "severity": "blocking",
+        "required": true,
+        "confidence": 0.72,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_camera_positions_total_roster_0",
+            "text": "Roster tab \"Positions\" sums to 91 active IP installs across North DC, South Warehouse, and Main Office.",
+            "source": "approved_site_roster.xlsx",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      },
+      "quote_camera_bundle_count": {
+        "value": 72,
+        "value_type": "integer",
+        "status": "needs_review",
+        "severity": "blocking",
+        "required": true,
+        "confidence": 0.9,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_quote_cam_bundle_0",
+            "text": "Line item CAM-BUNDLE-STD qty 72",
+            "source": "vendor_quote_axis_v2.pdf",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      },
+      "west_wing_in_scope": {
+        "value": "ambiguous",
+        "value_type": "string",
+        "status": "ambiguous",
+        "severity": "high",
+        "required": true,
+        "confidence": 0.55,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_west_wing_thread_0",
+            "text": "Earlier thread: include West Wing; latest: remove West Wing.",
+            "source": "customer_email_4-15.eml",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      }
+    },
+    "perSiteFields": {
+      "North Distribution Center": {
+        "electrical_spare_amps": {
+          "value": "",
+          "value_type": "string",
+          "status": "missing",
+          "severity": "blocking",
+          "required": true,
+          "confidence": 0.25,
+          "source_system": null,
+          "evidence": [
+            {
+              "evidence_span_id": "ev_north_dc_power_0",
+              "text": "MDP spare capacity not attached; field verification pending.",
+              "source": "kickoff_site_walk_notes.pdf",
+              "artifact_type": "doc"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      },
+      "South Warehouse": {
+        "ceiling_substrate": {
+          "value": "",
+          "value_type": "string",
+          "status": "missing",
+          "severity": "blocking",
+          "required": true,
+          "confidence": 0.2,
+          "source_system": null,
+          "evidence": [
+            {
+              "evidence_span_id": "ev_south_wh_ceiling_0",
+              "text": "No ceiling substrate called out in roster or walk notes.",
+              "source": "approved_site_roster.xlsx",
+              "artifact_type": "doc"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      },
+      "Main Office": {
+        "badge_lead_time_ok": {
+          "value": "pending",
+          "value_type": "string",
+          "status": "needs_review",
+          "severity": "non_blocking",
+          "required": false,
+          "confidence": 0.69,
+          "source_system": "transcript",
+          "evidence": [
+            {
+              "evidence_span_id": "ev_main_badge_0",
+              "text": "Badge clearance application required 14 calendar days before first on-site visit.",
+              "source": "meeting_transcript_4-15.vtt",
+              "artifact_type": "call"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      }
+    },
+    "reviewerDecisions": {},
+    "unresolvedItems": [
+      "Quantity reconciliation: North DC roster 35 vs vendor 28; South Warehouse roster 28 vs vendor 22; Main Office roster 28 vs vendor 22 (global 91 vs 72 bundled).",
+      "Resolve conflicting West Wing inclusion vs exclusion in customer_email_4-15.eml thread.",
+      "Confirm ceiling substrate at South Warehouse for pendant vs surface mount Axis P3245 adapters.",
+      "Obtain MDP spare ampacity at North DC for new PoE switch stacks."
+    ],
+    "lastScopeSnapshotId": "00000000-0000-4000-8000-000000000601",
+    "lastReviewedAt": "2026-04-15T18:30:00.000Z",
+    "lastOrbitBriefRunId": "00000000-0000-4000-8000-000000000602",
+    "lastOrbitBriefRunAt": "2026-04-28T22:15:00.000Z",
+    "contradictions": [
+      {
+        "id": "pkt_91ca72ff",
+        "family": "quantity_conflict",
+        "severity": "critical",
+        "confidence": 0.91,
+        "summary": "The approved_site_roster.xlsx workbook totals 91 camera positions; vendor_quote_axis_v2.pdf prices 72 bundled positions. Per site: North DC 35 roster vs 28 vendor; South Warehouse 28 vs 22; Main Office 28 vs 22.",
+        "left_summary": "91 total camera positions (35 + 28 + 28)",
+        "right_summary": "72 priced positions (28 + 22 + 22)",
+        "left_source_artifact": "approved_site_roster.xlsx",
+        "right_source_artifact": "vendor_quote_axis_v2.pdf",
+        "left_packet_id": "pkt_roster_qty",
+        "right_packet_id": "pkt_quote_qty"
+      },
+      {
+        "id": "pkt_scope_west_wing",
+        "family": "scope_inclusion_exclusion",
+        "severity": "high",
+        "confidence": 0.85,
+        "summary": "The customer_email_4-15.eml thread both requests West Wing inclusion (earlier) and removal (later).",
+        "inclusion_packet_id": "pkt_a1b2c3d4",
+        "exclusion_packet_id": "pkt_f00dcafe",
+        "source_artifact": "customer_email_4-15.eml"
+      }
+    ]
+  },
+  "fieldStateMap": {
+    "camera_positions_total": {
+      "value": 91,
+      "value_type": "integer",
+      "status": "needs_review",
+      "severity": "blocking",
+      "required": true,
+      "confidence": 0.72,
+      "source_system": "attachment",
+      "evidence": [
+        {
+          "text": "Roster tab \"Positions\" sums to 91 active IP installs.",
+          "source": "approved_site_roster.xlsx",
+          "artifact_type": "doc"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "orbitbrief-compile"
+    },
+    "quote_camera_bundle_count": {
+      "value": 72,
+      "value_type": "integer",
+      "status": "needs_review",
+      "severity": "blocking",
+      "required": true,
+      "confidence": 0.9,
+      "source_system": "attachment",
+      "evidence": [
+        {
+          "text": "Line item CAM-BUNDLE-STD qty 72",
+          "source": "vendor_quote_axis_v2.pdf",
+          "artifact_type": "doc"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "orbitbrief-compile"
+    },
+    "axis_camera_model_standard": {
+      "value": "Axis P3245-LVE",
+      "value_type": "string",
+      "status": "filled",
+      "severity": "non_blocking",
+      "required": true,
+      "confidence": 0.95,
+      "source_system": "transcript",
+      "evidence": [
+        {
+          "text": "Confirmed Axis P3245 family for fleet standard on 2026-04-15 call.",
+          "source": "meeting_transcript_4-15.vtt",
+          "artifact_type": "call"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "pm.reviewer@example.com"
+    },
+    "ceiling_type_south_wh": {
+      "value": "",
+      "value_type": "string",
+      "status": "missing",
+      "severity": "blocking",
+      "required": true,
+      "confidence": 0.2,
+      "source_system": null,
+      "evidence": [
+        {
+          "text": "No ceiling substrate called out in roster or walk notes.",
+          "source": "approved_site_roster.xlsx",
+          "artifact_type": "doc"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "orbitbrief-compile"
+    },
+    "electrical_spare_amps_north_dc": {
+      "value": "",
+      "value_type": "string",
+      "status": "missing",
+      "severity": "blocking",
+      "required": true,
+      "confidence": 0.25,
+      "source_system": null,
+      "evidence": [
+        {
+          "text": "MDP spare capacity not attached; field verification pending.",
+          "source": "kickoff_site_walk_notes.pdf",
+          "artifact_type": "doc"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "orbitbrief-compile"
+    },
+    "west_wing_in_scope": {
+      "value": "ambiguous",
+      "value_type": "string",
+      "status": "ambiguous",
+      "severity": "high",
+      "required": true,
+      "confidence": 0.55,
+      "source_system": "attachment",
+      "evidence": [
+        {
+          "text": "Earlier thread: include West Wing; latest: remove West Wing.",
+          "source": "customer_email_4-15.eml",
+          "artifact_type": "doc"
+        }
+      ],
+      "last_updated_at": "2026-04-28T16:10:00.000Z",
+      "last_updated_by": "orbitbrief-compile"
+    }
+  },
+  "clauseSelections": {
+    "cam_warranty_std": "five_year_advanced_replacement",
+    "install_standard": "b_icwa_ceiling_mount_preferred"
+  },
+  "sowReadiness": {
+    "score": 62,
+    "blockingMissing": 2,
+    "canHandoff": false,
+    "markedReady": false
+  },
+  "sowHandoff": {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "version": "sow_handoff_v1",
+    "requirements_version": "acme_demo_requirements_v1",
+    "policy_pack_hash": "h_pol_acme_demo_01",
+    "field_catalog_hash": "h_fc_acme_demo_01",
+    "active_domains": [
+      "managed_services",
+      "physical_security"
+    ],
+    "global_fields": {
+      "camera_positions_total": {
+        "value": 91,
+        "value_type": "integer",
+        "status": "needs_review",
+        "severity": "blocking",
+        "required": true,
+        "confidence": 0.72,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_camera_positions_total_roster_0",
+            "text": "Roster tab \"Positions\" sums to 91 active IP installs across North DC, South Warehouse, and Main Office.",
+            "source": "approved_site_roster.xlsx",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      },
+      "quote_camera_bundle_count": {
+        "value": 72,
+        "value_type": "integer",
+        "status": "needs_review",
+        "severity": "blocking",
+        "required": true,
+        "confidence": 0.9,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_quote_cam_bundle_0",
+            "text": "Line item CAM-BUNDLE-STD qty 72",
+            "source": "vendor_quote_axis_v2.pdf",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      },
+      "west_wing_in_scope": {
+        "value": "ambiguous",
+        "value_type": "string",
+        "status": "ambiguous",
+        "severity": "high",
+        "required": true,
+        "confidence": 0.55,
+        "source_system": "attachment",
+        "evidence": [
+          {
+            "evidence_span_id": "ev_west_wing_thread_0",
+            "text": "Earlier thread: include West Wing; latest: remove West Wing.",
+            "source": "customer_email_4-15.eml",
+            "artifact_type": "doc"
+          }
+        ],
+        "last_updated_at": "2026-04-28T16:10:00.000Z",
+        "last_updated_by": "orbitbrief-compile"
+      }
+    },
+    "site_registry": [
+      {
+        "name": "North Distribution Center",
+        "address": "1200 Logistics Parkway NE",
+        "city": "Atlanta",
+        "state": "GA",
+        "zip": "30318",
+        "country": "US"
+      },
+      {
+        "name": "South Warehouse",
+        "address": "4500 Industrial Boulevard",
+        "city": "Tampa",
+        "state": "FL",
+        "zip": "33605",
+        "country": "US"
+      },
+      {
+        "name": "Main Office",
+        "address": "88 Retail Plaza Drive",
+        "city": "Atlanta",
+        "state": "GA",
+        "zip": "30309",
+        "country": "US"
+      }
+    ],
+    "site_fields": {
+      "North Distribution Center": {
+        "electrical_spare_amps": {
+          "value": "",
+          "value_type": "string",
+          "status": "missing",
+          "severity": "blocking",
+          "required": true,
+          "confidence": 0.25,
+          "source_system": null,
+          "evidence": [
+            {
+              "evidence_span_id": "ev_north_dc_power_0",
+              "text": "MDP spare capacity not attached; field verification pending.",
+              "source": "kickoff_site_walk_notes.pdf",
+              "artifact_type": "doc"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      },
+      "South Warehouse": {
+        "ceiling_substrate": {
+          "value": "",
+          "value_type": "string",
+          "status": "missing",
+          "severity": "blocking",
+          "required": true,
+          "confidence": 0.2,
+          "source_system": null,
+          "evidence": [
+            {
+              "evidence_span_id": "ev_south_wh_ceiling_0",
+              "text": "No ceiling substrate called out in roster or walk notes.",
+              "source": "approved_site_roster.xlsx",
+              "artifact_type": "doc"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      },
+      "Main Office": {
+        "badge_lead_time_ok": {
+          "value": "pending",
+          "value_type": "string",
+          "status": "needs_review",
+          "severity": "non_blocking",
+          "required": false,
+          "confidence": 0.69,
+          "source_system": "transcript",
+          "evidence": [
+            {
+              "evidence_span_id": "ev_main_badge_0",
+              "text": "Badge clearance application required 14 calendar days before first on-site visit.",
+              "source": "meeting_transcript_4-15.vtt",
+              "artifact_type": "call"
+            }
+          ],
+          "last_updated_at": "2026-04-28T16:10:00.000Z",
+          "last_updated_by": "orbitbrief-compile"
+        }
+      }
+    },
+    "clause_choices": {
+      "cam_warranty_std": "five_year_advanced_replacement",
+      "install_standard": "b_icwa_ceiling_mount_preferred"
+    },
+    "evidence_map_refs": {
+      "camera_positions_total": [
+        {
+          "evidence_span_id": "ev_camera_positions_total_roster_0",
+          "text": "Roster tab \"Positions\" sums to 91 active IP installs across North DC, South Warehouse, and Main Office.",
+          "source": "approved_site_roster.xlsx",
+          "artifact_type": "doc"
+        }
+      ],
+      "quote_camera_bundle_count": [
+        {
+          "evidence_span_id": "ev_quote_cam_bundle_0",
+          "text": "Line item CAM-BUNDLE-STD qty 72",
+          "source": "vendor_quote_axis_v2.pdf",
+          "artifact_type": "doc"
+        }
+      ],
+      "west_wing_in_scope": [
+        {
+          "evidence_span_id": "ev_west_wing_thread_0",
+          "text": "Earlier thread: include West Wing; latest: remove West Wing.",
+          "source": "customer_email_4-15.eml",
+          "artifact_type": "doc"
+        }
+      ]
+    },
+    "constraints_state": {
+      "violations": [
+        {
+          "constraint": {
+            "if": {
+              "field": "camera_positions_total",
+              "gt": 72
+            },
+            "then_require": [
+              "quote_camera_bundle_count"
+            ],
+            "severity": "blocking",
+            "reason": "Roster camera positions exceed the quoted CAM-BUNDLE-STD quantity until PM reconciles line items."
+          },
+          "missingFields": [
+            "quote_reconciliation_memo"
+          ]
+        }
+      ],
+      "allPassed": false
+    },
+    "readiness_metadata": {
+      "globalScore": 62,
+      "blockingMissing": 2,
+      "highRiskCount": 3,
+      "siteCompleteness": {
+        "complete": 1,
+        "partial": 1,
+        "blocked": 1,
+        "total": 3
+      },
+      "evidenceAdequacy": {
+        "adequate": 18,
+        "total": 24,
+        "threshold": 80
+      }
+    },
+    "review_audit_trail": {
+      "reviewerDecisions": {},
+      "lastReviewedAt": "2026-04-15T18:30:00.000Z",
+      "acknowledgements": [
+        "ack_fixture_acme_demo"
+      ],
+      "sowReadyDecision": {
+        "isReady": false,
+        "reasonCode": "quantity_and_scope_gates_open",
+        "reasonText": "Handoff blocked until roster vs quote quantities and West Wing scope conflict are resolved.",
+        "decidedAt": "2026-04-29T18:45:12.000Z",
+        "decidedBy": "bang_translator_fixture"
+      },
+      "missingResolutionOrder": [
+        "quote_reconciliation_memo",
+        "west_wing_scope_decision",
+        "ceiling_substrate_south_wh",
+        "mdp_spare_amps_north_dc"
+      ]
+    },
+    "contract_provenance": {
+      "scope_snapshot_id": "00000000-0000-4000-8000-000000000601",
+      "model_run_id": "00000000-0000-4000-8000-000000000602",
+      "requirements_version": "acme_demo_requirements_v1",
+      "policy_pack_hash": "h_pol_acme_demo_01",
+      "field_catalog_hash": "h_fc_acme_demo_01",
+      "generated_at": "2026-04-29T18:45:12.000Z",
+      "generated_by": "bang_translator_fixture"
+    },
+    "compiled_at": "2026-04-29T18:45:12.000Z",
+    "compiled_by": "bang_translator_fixture"
+  },
+  "generationHistory": [
+    {
+      "sow_version_id": "00000000-0000-4000-8000-000000000501",
+      "handoff_id": "00000000-0000-4000-8000-000000000502",
+      "status": "draft",
+      "created_at": "2026-04-16T14:00:00.000Z",
+      "updated_at": "2026-04-16T14:30:00.000Z",
+      "links": [
+        "https://example.com/internal/sow/acme-rollout/draft-v1"
+      ],
+      "status_reason": "Awaiting scope reconciliation"
+    },
+    {
+      "sow_version_id": "00000000-0000-4000-8000-000000000503",
+      "handoff_id": "00000000-0000-4000-8000-000000000504",
+      "status": "failed",
+      "created_at": "2026-04-10T09:15:00.000Z",
+      "updated_at": "2026-04-10T09:20:00.000Z",
+      "links": [
+        "https://example.com/internal/sow/acme-rollout/failed-attempt-20260410"
+      ],
+      "status_reason": "Template validation: missing ceiling_type_south_wh"
+    }
+  ],
+  "lastIngestAt": "2026-04-29T18:45:12.000Z",
+  "lastIngestSource": "bang-compile"
+}
