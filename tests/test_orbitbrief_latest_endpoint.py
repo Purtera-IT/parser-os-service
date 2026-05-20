@@ -35,6 +35,20 @@ def test_orbitbrief_rebuild_latest_uploads_envelope_mocked(
         "atoms": [],
         "packets": [],
     }
+    fake_scope = {
+        "version": "scope_process_v1",
+        "extractedReview": {
+            "lastOrbitBriefRunId": "11111111-1111-4111-8111-111111111111",
+            "lastOrbitBriefRunAt": "2026-05-19T12:00:00Z",
+        },
+        "orbitbriefAudit": {
+            "evidenceMap": {"site_count": [{"atom_id": "a1"}]},
+            "missing": [],
+            "sowReadiness": 42,
+        },
+        "projectNeeds": {"site_list": [{"site_id": "s1", "name": "Site A"}]},
+        "selectedArtifacts": {"calls": [], "emails": [], "docs": [], "notes": []},
+    }
 
     with (
         patch(
@@ -44,6 +58,10 @@ def test_orbitbrief_rebuild_latest_uploads_envelope_mocked(
         patch(
             "parser_os_service.server.routes.orbitbrief_latest._build_envelope",
             return_value=fake_envelope,
+        ),
+        patch(
+            "parser_os_service.server.routes.orbitbrief_latest.to_scope_process_v1",
+            return_value=fake_scope,
         ),
         patch("app.core.schemas.COMPILER_VERSION", "test-version"),
     ):
@@ -62,3 +80,7 @@ def test_orbitbrief_rebuild_latest_uploads_envelope_mocked(
     assert env_path.is_file()
     assert json.loads(env_path.read_text(encoding="utf-8"))["schema_version"] == "orbitbrief.input.v2"
     assert "attachments_status" in data
+    sp = data.get("scope_process_v1")
+    assert isinstance(sp, dict)
+    assert sp["orbitbriefAudit"]["evidenceMap"]
+    assert sp["projectNeeds"]["site_list"]

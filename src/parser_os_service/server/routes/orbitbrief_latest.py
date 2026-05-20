@@ -18,6 +18,7 @@ from parser_os_service.server.blob_client import (
     download_blob_to_path,
     upload_json_blob,
 )
+from parser_os_service.server.projector import _finished_at_iso, to_scope_process_v1
 from parser_os_service.server.routes.compile import (
     _attachments_status,
     _domain_pack_from_manifest,
@@ -97,6 +98,12 @@ def orbitbrief_rebuild_latest_endpoint(
             dest = art_dir / str(row["filename"])
             download_blob_to_path(str(row["blob_url"]), dest)
 
+        # Sidecar for envelope builder (CRM context, etc.)
+        (work / ".parser_manifest.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
         domain_pack = _domain_pack_from_manifest(manifest)
         from app.core.schemas import COMPILER_VERSION
 
@@ -126,6 +133,21 @@ def orbitbrief_rebuild_latest_endpoint(
             "parser_os_version": str(COMPILER_VERSION),
         }
 
+        ctx = manifest.get("context")
+        prior = None
+        if isinstance(ctx, dict):
+            prior = ctx.get("prior_scope_process_v1")
+        scope_process_v1 = to_scope_process_v1(
+            result,
+            manifest,
+            body.manifest_blob_url,
+            prior if isinstance(prior, dict) else None,
+        )
+        er = scope_process_v1.setdefault("extractedReview", {})
+        if isinstance(er, dict):
+            er["lastOrbitBriefRunId"] = compile_id
+            er["lastOrbitBriefRunAt"] = _finished_at_iso(result)
+
         return {
             "compile_id": compile_id,
             "deal_id": deal_id,
@@ -135,6 +157,7 @@ def orbitbrief_rebuild_latest_endpoint(
             "envelope_blob_path": rel,
             "summary": summary,
             "attachments_status": _attachments_status(result, manifest),
+            "scope_process_v1": scope_process_v1,
         }
     finally:
         shutil.rmtree(work, ignore_errors=True)
