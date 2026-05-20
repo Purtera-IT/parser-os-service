@@ -123,6 +123,59 @@ def test_mapping_rows_from_synthetic_compile_result() -> None:
     assert len(sub["extractedReview.contradictions"] or []) == 2
 
 
+def test_project_needs_notes_from_crm_not_fixture_template() -> None:
+    atoms = [
+        EvidenceAtom(
+            id="brief-1",
+            project_id="p1",
+            artifact_id="art-brief",
+            atom_type=AtomType.scope_item,
+            raw_text=(
+                "OPTBOT is refreshing three Atlanta-area offices to create a common "
+                "collaboration and wireless standard."
+            ),
+            normalized_text=(
+                "OPTBOT is refreshing three Atlanta-area offices to create a common "
+                "collaboration and wireless standard."
+            ),
+            value={"normalized_item": "scope:atl_refresh"},
+            entity_keys=["site:atl_hq"],
+            source_refs=[
+                SourceRef(
+                    id="sr-brief",
+                    artifact_id="art-brief",
+                    artifact_type=ArtifactType.pdf,
+                    filename="01_deal_overview_executive_brief.pdf",
+                    locator={},
+                    extraction_method="test",
+                    parser_version="1",
+                )
+            ],
+            receipts=[],
+            authority_class=AuthorityClass.contractual_scope,
+            confidence=0.92,
+            review_status=ReviewStatus.auto_accepted,
+            review_flags=[],
+            parser_version="1",
+        ),
+    ]
+    cr = CompileResult(project_id="p1", atoms=atoms, entities=[], edges=[], packets=[])
+    manifest: dict[str, Any] = {
+        "artifacts": [],
+        "context": {
+            "crm": {
+                "deal_name": "000087 - (Test) OPTBOT - Atlanta Office Refresh",
+                "account_name": "OPTBOT",
+            }
+        },
+    }
+    scope = to_scope_process_v1(cr, manifest, "https://example.blob.core.windows.net/c/manifest.json")
+    notes = str((scope.get("projectNeeds") or {}).get("notes") or "")
+    assert "Acme Corp" not in notes
+    assert "North DC" not in notes
+    assert "Atlanta" in notes or "OPTBOT" in notes
+
+
 def test_sow_handoff_contract_after_projector_with_prior(scope_fixture_path: Path) -> None:
     template = json.loads(scope_fixture_path.read_text(encoding="utf-8"))
     atoms = [_atom("a1", AuthorityClass.contractual_scope)]

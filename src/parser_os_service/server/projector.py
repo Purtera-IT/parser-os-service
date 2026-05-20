@@ -19,6 +19,31 @@ from app.core.schemas import (
 
 PROJECTOR_VERSION = "0.1.0"
 
+# Shipped in scope_process_v1.example.json — must not persist on real compiles.
+_FIXTURE_NOTES_MARKERS = (
+    "Acme Corp multi-site Axis rollout",
+    "North DC loading lanes",
+    "reconcile quote vs roster before final labor load",
+)
+
+_BRIEF_SOURCE_HINTS = (
+    "executive_brief",
+    "deal_overview",
+    "01_deal",
+    "statement_of_work",
+    "02_statement",
+)
+
+_SITE_NAME_NOISE = (
+    "mock_msa",
+    "hs_deal",
+    "docx",
+    "site_surveys",
+    "pm et",
+    "monday thursday",
+    "contracting_procurement",
+)
+
 
 def _resource_scope_template() -> dict[str, Any]:
     root = resources.files("parser_os_service.data")
@@ -221,6 +246,127 @@ def _contradictions_packets(result: CompileResult) -> list[dict[str, Any]]:
     return out
 
 
+def _crm_from_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    crm = manifest.get("crm")
+    if isinstance(crm, dict):
+        return crm
+    ctx = manifest.get("context")
+    if isinstance(ctx, dict) and isinstance(ctx.get("crm"), dict):
+        return cast(dict[str, Any], ctx["crm"])
+    return {}
+
+
+def _normalize_note_sentence(text: str, *, max_len: int = 480) -> str:
+    one = " ".join(text.split()).strip()
+    if len(one) <= max_len:
+        return one
+    cut = one[: max_len - 1].rsplit(" ", 1)[0]
+    return (cut or one[: max_len - 1]).rstrip() + "…"
+
+
+def _brief_atoms_text(result: CompileResult) -> list[str]:
+    snippets: list[str] = []
+    for atom in result.atoms:
+        src = atom.source_refs[0] if atom.source_refs else None
+        fn = (src.filename if src is not None else "").lower()
+        if not any(h in fn for h in _BRIEF_SOURCE_HINTS):
+            continue
+        text = (atom.normalized_text or atom.raw_text or "").strip()
+        if len(text) >= 48:
+            snippets.append(text)
+    return snippets
+
+
+def _scope_inclusion_summaries(result: CompileResult, *, limit: int = 2) -> list[str]:
+    out: list[str] = []
+    for packet in _packets_by_family(result, PacketFamily.scope_inclusion):
+        reason = (packet.reason or "").strip()
+        if len(reason) >= 36:
+            out.append(reason)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _site_names_for_notes(result: CompileResult, *, limit: int = 5) -> list[str]:
+    seen: set[str] = set()
+    names: list[str] = []
+    for entity in result.entities:
+        if entity.entity_type != "site":
+            continue
+        name = (entity.canonical_name or "").strip()
+        if len(name) < 3 or len(name) > 56:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        if any(noise in key for noise in _SITE_NAME_NOISE):
+            continue
+        seen.add(key)
+        names.append(name)
+        if len(names) >= limit:
+            break
+    return names
+
+
+def _project_needs_notes(result: CompileResult, manifest: Mapping[str, Any]) -> str:
+    """Deal-specific synopsis for OrbitBrief — not the Bang fixture template."""
+
+    crm = _crm_from_manifest(manifest)
+    deal_name = str(crm.get("deal_name") or crm.get("name") or "").strip()
+    account_name = str(crm.get("account_name") or crm.get("account") or "").strip()
+
+    parts: list[str] = []
+    if deal_name:
+        lead = deal_name
+        if account_name and account_name.lower() not in deal_name.lower():
+            lead = f"{account_name} — {deal_name}"
+        parts.append(_normalize_note_sentence(lead, max_len=160))
+
+    brief_snippets = _brief_atoms_text(result)
+    if brief_snippets:
+        # Prefer narrative scope sentences over SKU tables / contact blocks.
+        narrative = [
+            s
+            for s in brief_snippets
+            if any(
+                token in s.lower()
+                for token in (
+                    "refresh",
+                    "rollout",
+                    "moderniz",
+                    "deploy",
+                    "install",
+                    "site",
+                    "office",
+                    "scope",
+                    "project",
+                )
+            )
+            and "units x $" not in s.lower()
+            and "@" not in s[:40]
+        ]
+        pool = narrative if narrative else brief_snippets
+        parts.append(_normalize_note_sentence(max(pool, key=len)))
+    else:
+        for summary in _scope_inclusion_summaries(result):
+            parts.append(_normalize_note_sentence(summary))
+            if sum(len(p) for p in parts) > 420:
+                break
+
+    sites = _site_names_for_notes(result)
+    if sites:
+        parts.append(f"Sites in scope: {', '.join(sites)}.")
+
+    notes = " ".join(parts).strip()
+    if not notes:
+        notes = (
+            "Scope compiled from discovery artifacts; "
+            "review blockers in the action inbox before release."
+        )
+    return notes[:2000]
+
+
 def _finished_at_iso(result: CompileResult) -> str:
     if result.manifest and result.manifest.completed_at:
         return str(result.manifest.completed_at)
@@ -270,6 +416,7 @@ def to_scope_process_v1(
     assert isinstance(pn, dict)
     pn["active_domains"] = _active_domains_from_packets(result)
     pn["site_list"] = _site_list(result)
+    pn["notes"] = _project_needs_notes(result, manifest)
 
     scope["sowReadiness"] = _sow_readiness(result)
 
@@ -310,6 +457,7 @@ def mapping_subset(scope: Mapping[str, Any]) -> dict[str, Any]:
         "sowHandoff.decisions": sh.get("decisions"),
         "sowHandoff.action_items": sh.get("action_items"),
         "projectNeeds.active_domains": (scope.get("projectNeeds") or {}).get("active_domains"),
+        "projectNeeds.notes": (scope.get("projectNeeds") or {}).get("notes"),
         "projectNeeds.site_list": (scope.get("projectNeeds") or {}).get("site_list"),
         "sowReadiness": scope.get("sowReadiness"),
         "extractedReview.contradictions": (scope.get("extractedReview") or {}).get("contradictions"),
