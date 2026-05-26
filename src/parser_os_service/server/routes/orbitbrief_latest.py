@@ -44,19 +44,80 @@ def _run_compile_project(
     work: Path,
     compile_id: str,
     domain_pack: str | None,
+    compile_options: dict[str, Any] | None = None,
 ):
-    """Delegate to parser-os `compile_project` (patch in tests)."""
+    """Delegate to parser-os `compile_project` (patch in tests).
+
+    Reads ``manifest.context.compile_options`` (passed as
+    ``compile_options``) to override per-deal:
+
+      compile_project args:
+        allow_errors, allow_unverified_receipts, use_cache,
+        domain_pack, abstain_threshold
+
+      env-var-shaped LLM toggles (set on os.environ for this call so
+      parser-os modules pick them up at LLM-call time):
+        disable_site_llm        → SOWSMITH_SITE_LLM_DISABLE=1
+        disable_multi_entity_llm → SOWSMITH_MULTI_ENTITY_DISABLE=1
+        ollama_model            → OLLAMA_MODEL
+        ollama_host             → OLLAMA_HOST
+        llm_timeout_seconds     → SOWSMITH_LLM_TIMEOUT
+        llm_parallel            → SOWSMITH_LLM_PARALLEL
+        disable_ocr             → PARSER_OS_OCR_DISABLE=1
+
+    Unknown keys are ignored (additive contract). Defaults preserve
+    today's behavior, so the absence of compile_options is a no-op.
+    """
     from app.core.compiler import compile_project
 
-    return compile_project(
-        project_dir=work,
-        project_id=compile_id,
-        allow_errors=True,
-        allow_unverified_receipts=True,
-        persistence_hook=None,
-        domain_pack=domain_pack,
-        use_cache=False,
-    )
+    opts = compile_options or {}
+
+    # Apply env-var-shaped overrides for the duration of this compile.
+    # We save+restore so concurrent compile requests don't bleed state.
+    env_keys: dict[str, tuple[str, str | None]] = {}
+
+    def _set_env(name: str, value: str) -> None:
+        env_keys[name] = (name, os.environ.get(name))
+        os.environ[name] = value
+
+    if opts.get("disable_site_llm") is True:
+        _set_env("SOWSMITH_SITE_LLM_DISABLE", "1")
+    if opts.get("disable_multi_entity_llm") is True:
+        _set_env("SOWSMITH_MULTI_ENTITY_DISABLE", "1")
+    if opts.get("disable_ocr") is True:
+        _set_env("PARSER_OS_OCR_DISABLE", "1")
+    if isinstance(opts.get("ollama_model"), str) and opts["ollama_model"].strip():
+        _set_env("OLLAMA_MODEL", opts["ollama_model"].strip())
+    if isinstance(opts.get("ollama_host"), str) and opts["ollama_host"].strip():
+        _set_env("OLLAMA_HOST", opts["ollama_host"].strip())
+    if isinstance(opts.get("llm_timeout_seconds"), int):
+        _set_env("SOWSMITH_LLM_TIMEOUT", str(int(opts["llm_timeout_seconds"])))
+    if isinstance(opts.get("llm_parallel"), int):
+        _set_env("SOWSMITH_LLM_PARALLEL", str(int(opts["llm_parallel"])))
+
+    # Per-deal override for the chosen domain pack (else manifest-derived)
+    effective_domain_pack = opts.get("domain_pack") or domain_pack
+
+    try:
+        return compile_project(
+            project_dir=work,
+            project_id=compile_id,
+            allow_errors=bool(opts.get("allow_errors", True)),
+            allow_unverified_receipts=bool(opts.get(
+                "allow_unverified_receipts", True
+            )),
+            persistence_hook=None,
+            domain_pack=effective_domain_pack,
+            abstain_threshold=float(opts.get("abstain_threshold", 0.70)),
+            use_cache=bool(opts.get("use_cache", False)),
+        )
+    finally:
+        # Restore environment to pre-compile state
+        for name, (_, prev) in env_keys.items():
+            if prev is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = prev
 
 
 def _build_envelope(work: Path, result: Any):
@@ -107,7 +168,16 @@ def orbitbrief_rebuild_latest_endpoint(
         domain_pack = _domain_pack_from_manifest(manifest)
         from app.core.schemas import COMPILER_VERSION
 
-        result = _run_compile_project(work, compile_id, domain_pack)
+        # Per-deal compile_options reader (additive — unknown keys
+        # ignored, no compile_options = today's hardcoded defaults).
+        # See contracts/DEVELOPER_INTEGRATION_PLAYBOOK.md §5.3 for
+        # the supported key catalog.
+        ctx_for_opts = manifest.get("context") or {}
+        compile_options = ctx_for_opts.get("compile_options") if isinstance(ctx_for_opts, dict) else None
+        result = _run_compile_project(
+            work, compile_id, domain_pack,
+            compile_options=compile_options if isinstance(compile_options, dict) else None,
+        )
         result.compile_id = compile_id
 
         envelope = _build_envelope(work, result)
