@@ -1,0 +1,79 @@
+# orbitbrief.input.v2 — parser-os envelope written to blob
+# Path: deals/{dealId}/orbitbrief/latest/envelope.json
+# Producer: app.core.orbitbrief_envelope.build_orbitbrief_envelope
+# Consumer: Purpulse SPA (Deal Artifacts), SowSmith, Orbitbrief-Core (input), Platform (amount backfill)
+
+schema_version: orbitbrief.input.v2
+owner: parser-os
+last_reviewed: 2026-05-26
+
+# Purpulse MUST NOT break if optional/experimental keys are absent.
+# Bump to orbitbrief.input.v3 for breaking top-level reshapes.
+
+required_top_level:
+  - schema_version   # must equal orbitbrief.input.v2 until v3 cutover
+  - project_id
+  - compile_id
+  - generated_at     # ISO-8601 UTC
+  - summary
+  - documents        # NOT "artifacts" — per-file rows
+  - atoms
+  - packets
+  - entities
+  - edges
+  - indexes
+
+optional_top_level:
+  # Cockpit pre-aggregations (Orbitbrief-Core builders inlined in envelope)
+  - pm_dashboard
+  - sow_readiness_scorecard
+  - srl_missing_checklist
+  - scope_truth
+  - change_order_timeline
+  - site_readiness
+  - stakeholder_load
+  - project_vitals
+  # Omitted entirely when no schematic drawings
+  - drawings
+
+experimental_top_level:
+  # Developer may add keys here; Purpulse UI must use optional access only.
+  # List new keys in DEVELOPER_INTEGRATION_PLAYBOOK.md §7 before shipping.
+  # Candidates (NOT yet shipped — see §7.4 in playbook):
+  #   - site_clusters         (LLM-derived alias groups for site fusion)
+  #   - summary.llm_usage     (per-pack LLM-call count + total tokens)
+  #   - summary.parser_features  (list of which optional pipelines ran)
+  []
+
+deprecated_top_level: []
+
+# Entity-type content upgrades (top-level shape unchanged; richness of
+# entities[] is now LLM-first for cust/stake/mile/req/site). See
+# playbook §7.1.
+entity_content_upgrades_2026_05_27:
+  - entity_type: customer
+    change: "LLM-first via multi_entity_llm; deduped to ~1 canonical per pack"
+  - entity_type: stakeholder
+    change: "LLM-first; 3-layer hygiene drops field labels / org tokens / jargon"
+  - entity_type: milestone
+    change: "LLM-first; catches named events (cutover, freezes, blackouts) plus dates"
+  - entity_type: requirement
+    change: "LLM-first; categorized (sla|compliance|performance|security|deliverable|acceptance|other); ≤25 words each"
+  - entity_type: site
+    change: "LLM-first since prior release; 4-layer hygiene clean"
+
+summary_required_keys:
+  - atom_count
+  - packet_count
+  - artifact_count
+
+documents_row_notes: |
+  Each documents[] row includes artifact_id, filename, artifact_type,
+  structured projection, atom_ids, parse_outcome (when present).
+
+atoms_row_notes: |
+  Compact atoms: id, artifact_id, atom_type, authority_class, confidence,
+  text, section_path, locator, verified.
+
+# Developer inventory extension (fill in playbook §7):
+developer_ui_consumed_envelope_paths: []

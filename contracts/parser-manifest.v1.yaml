@@ -1,0 +1,86 @@
+# Parser compile manifest — Platform → parser-os-service
+# Blob path: deals/{dealId}/parser-manifests/{compileId}.json
+# Producer: Platform-infra parser-os-orbitbrief-queue.js buildAndUploadManifest
+
+schema_id: parser-manifest.v1
+owner: Platform-infra (writer) + parser-os-service (reader)
+last_reviewed: 2026-05-26
+
+required_top_level:
+  - compile_id
+  - deal_id
+  - artifacts
+
+artifacts_row_required:
+  - attachment_id   # Purpulse attachments.id
+  - filename
+  - blob_url
+
+artifacts_row_optional:
+  - content_sha256
+  - size_bytes
+  - mime_type
+  - source          # manual | hubspot | ...
+  - modality_hint
+
+optional_top_level:
+  - org_id
+  - purpulse_version
+  - trigger
+  - context
+  - domain_pack     # top-level legacy; prefer context.domain_pack
+
+context_recommended_shape:
+  crm:
+    purpulse_opportunity_id: string
+    hubspot_deal_id: string | null
+    deal_name: string | null
+    amount: number | null
+    account_name: string | null
+  prior_scope_process_v1: object | null
+  # Developer-owned per-compile flags (add keys freely; Platform ignores unknown keys)
+  compile_options: {}
+
+compile_options_reserved_for_developer:
+  description: |
+    Put parser-only toggles here. parser-os-service should read
+    manifest.context.compile_options with defaults when absent.
+    Do NOT require Platform code changes for new keys.
+
+  # Reserved keys (proposed — wiring lives in parser-os-service). Each
+  # maps to an existing compile_project arg or an env var. Default = no
+  # change to current behavior. See playbook §5.3.
+  reserved_keys:
+    domain_pack:                  { type: string, default: auto-route,    maps_to: "compile_project(domain_pack=…)" }
+    allow_errors:                 { type: bool,   default: true_service,  maps_to: "compile_project(allow_errors=…)" }
+    allow_unverified_receipts:    { type: bool,   default: true_service,  maps_to: "compile_project(allow_unverified_receipts=…)" }
+    use_cache:                    { type: bool,   default: false_service, maps_to: "compile_project(use_cache=…)" }
+    abstain_threshold:            { type: float,  default: 0.70,          maps_to: "compile_project(abstain_threshold=…)" }
+    disable_site_llm:             { type: bool,   default: false,         maps_to: "env SOWSMITH_SITE_LLM_DISABLE" }
+    disable_multi_entity_llm:     { type: bool,   default: false,         maps_to: "env SOWSMITH_MULTI_ENTITY_DISABLE" }
+    ollama_model:                 { type: string, default: "qwen3:14b",   maps_to: "env OLLAMA_MODEL" }
+    ollama_host:                  { type: string, default: tailnet,       maps_to: "env OLLAMA_HOST" }
+    llm_timeout_seconds:          { type: int,    default: 180,           maps_to: "env SOWSMITH_LLM_TIMEOUT" }
+    llm_parallel:                 { type: int,    default: 5,             maps_to: "env SOWSMITH_LLM_PARALLEL" }
+    disable_ocr:                  { type: bool,   default: false,         maps_to: "env PARSER_OS_OCR_DISABLE" }
+
+  examples:
+    - domain_pack: managed_services
+    - allow_errors: true
+    - use_cache: false
+    - disable_multi_entity_llm: true     # offline / air-gap deal
+    - ollama_model: "qwen3:32b"          # per-deal escalated extraction quality
+
+# Real signature of parser-os compile_project (for projector reference):
+compile_project_signature:
+  positional:
+    project_dir: "Path"
+  optional:
+    project_id:                "str | None = None"
+    allow_errors:              "bool = False  (service overrides to True)"
+    allow_unverified_receipts: "bool = False  (service overrides to True)"
+    persistence_hook:          "Callable[[CompileResult], None] | None = None"
+    domain_pack:               "DomainPack | str | Path | None = None"
+    calibrator_path:           "Path | None = None"
+    abstain_threshold:         "float = 0.70"
+    use_cache:                 "bool = True  (service overrides to False)"

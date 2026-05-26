@@ -1,0 +1,66 @@
+# POST /v1/orbitbrief/rebuild-latest — parser-os-service response
+# Caller: Platform-infra azure-function-api parser-os-orbitbrief-queue
+# Auth: Bearer (PARSER_OS_SERVICE bearer)
+
+schema_id: rebuild-latest.response.v1
+owner: parser-os-service
+last_reviewed: 2026-05-26
+
+request:
+  required:
+    manifest_blob_url: string
+  optional: {}
+
+response_on_success:
+  required:
+    - compile_id
+    - deal_id
+    - status          # "succeeded"
+    - parser_version  # COMPILER_VERSION from parser-os
+    - envelope_blob_url
+    - envelope_blob_path   # deals/{dealId}/orbitbrief/latest/envelope.json
+    - summary
+    - attachments_status
+    - scope_process_v1
+  summary_shape:
+    artifact_count: integer
+    atom_count: integer
+    packet_count: integer
+    hard_errors: integer
+    warnings: integer
+    packets_by_family: object
+    packets_by_severity: object
+    parser_os_version: string
+
+attachments_status:
+  description: |
+    Map keyed by Purpulse attachment_id (UUID string).
+    Platform persists to public.attachments (parse_status, atoms_count, receipts_*, last_compile_id, parser_version).
+  value_required:
+    - parse_status   # parsed | intake_only | failed | pending | queued | processing
+  value_optional:
+    - atoms_count
+    - receipts_verified
+    - receipts_total
+    - error
+
+scope_process_v1:
+  description: |
+    Projected UI state merged into opportunities.quote_data.scope_process_v1.
+    Built by parser_os_service.server.projector.to_scope_process_v1.
+    TypeScript mirror: purpulse-frontend/src/lib/scope-models/types.ts (ScopeProcessState).
+  notes: |
+    Platform overwrites extractedReview.lastOrbitBriefRunId / lastOrbitBriefRunAt on success.
+    Purpulse SPA reads currentStep, projectNeeds, orbitbriefAudit, sowReadiness, fieldStateMap, etc.
+
+platform_side_effects:
+  - table: attachments
+    from: attachments_status
+  - table: opportunities.quote_data.scope_process_v1
+    from: scope_process_v1
+  - table: opportunities.amount
+    from: envelope.json heuristic (only when amount IS NULL)
+  - blob: deals/{dealId}/orbitbrief/latest/envelope.json
+    from: parser-os write during rebuild-latest
+
+experimental_response_keys: []
