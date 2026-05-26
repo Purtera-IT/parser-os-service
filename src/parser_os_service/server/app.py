@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from fastapi import FastAPI
 
 from parser_os_service.server import postgres_client
-from parser_os_service.server.routes import compile, health, jobs, orbitbrief_latest
+from parser_os_service.server.routes import compile, health, jobs, orbitbrief_latest, version
 
 
 @asynccontextmanager
@@ -24,3 +24,4 @@ app.include_router(health.router)
 app.include_router(compile.router)
 app.include_router(jobs.router)
 app.include_router(orbitbrief_latest.router)
+app.include_router(version.router)
