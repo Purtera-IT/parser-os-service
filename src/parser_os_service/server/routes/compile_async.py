@@ -42,6 +42,12 @@ QUEUE_NAME = os.environ.get(
 BLOB_CONTAINER = os.environ.get(
     "AZURE_STORAGE_BLOB_CONTAINER", "orbitbrief-artifacts"
 )
+# Connection string takes precedence (same pattern as orbitbrief-core-worker).
+# Falls back to managed identity via DefaultAzureCredential if not set, but
+# that path requires Storage Queue/Blob Data Contributor role on the storage
+# account — which we don't always grant.
+CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING") or \
+    os.environ.get("ORBITBRIEF_ARTIFACTS_CONNECTION_STRING")
 
 
 _cred: DefaultAzureCredential | None = None
@@ -52,22 +58,32 @@ _blob_service: BlobServiceClient | None = None
 def _get_queue_client():
     global _cred, _queue_service
     if _queue_service is None:
-        _cred = _cred or DefaultAzureCredential()
-        _queue_service = QueueServiceClient(
-            account_url=f"https://{ACCOUNT_NAME}.queue.core.windows.net",
-            credential=_cred,
-        )
+        if CONNECTION_STRING:
+            _queue_service = QueueServiceClient.from_connection_string(
+                CONNECTION_STRING
+            )
+        else:
+            _cred = _cred or DefaultAzureCredential()
+            _queue_service = QueueServiceClient(
+                account_url=f"https://{ACCOUNT_NAME}.queue.core.windows.net",
+                credential=_cred,
+            )
     return _queue_service.get_queue_client(QUEUE_NAME)
 
 
 def _get_blob_service():
     global _cred, _blob_service
     if _blob_service is None:
-        _cred = _cred or DefaultAzureCredential()
-        _blob_service = BlobServiceClient(
-            account_url=f"https://{ACCOUNT_NAME}.blob.core.windows.net",
-            credential=_cred,
-        )
+        if CONNECTION_STRING:
+            _blob_service = BlobServiceClient.from_connection_string(
+                CONNECTION_STRING
+            )
+        else:
+            _cred = _cred or DefaultAzureCredential()
+            _blob_service = BlobServiceClient(
+                account_url=f"https://{ACCOUNT_NAME}.blob.core.windows.net",
+                credential=_cred,
+            )
     return _blob_service
 
 
