@@ -9,7 +9,14 @@ from collections.abc import AsyncGenerator
 from fastapi import FastAPI
 
 from parser_os_service.server import postgres_client
-from parser_os_service.server.routes import compile, health, jobs, orbitbrief_latest, version
+from parser_os_service.server.routes import (
+    compile,
+    compile_async,
+    health,
+    jobs,
+    orbitbrief_latest,
+    version,
+)
 
 
 @asynccontextmanager
@@ -22,6 +29,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="parser-os-service", version="0.1.0", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(compile.router)
+# v45.2: async compile path (enqueue-and-poll, runs in parser-os-worker)
+app.include_router(compile_async.router)
 app.include_router(jobs.router)
 app.include_router(orbitbrief_latest.router)
 app.include_router(version.router)
