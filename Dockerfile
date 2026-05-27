@@ -44,6 +44,7 @@ RUN set -eux; \
     pip install --no-cache-dir \
       "azure-identity>=1.15" \
       "azure-storage-blob>=12.19" \
+      "azure-storage-queue>=12.10" \
       "fastapi>=0.110" \
       "psycopg[binary,pool]>=3.1" \
       "pydantic>=2.5" \
