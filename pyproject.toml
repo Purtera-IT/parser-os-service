@@ -9,8 +9,10 @@ description = "PurPulse HTTP wrapper around Parser OS (purtera-evidence-mvp) wit
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  # Phase 0: replace `main` with the tag from docs/decisions/0001-parser-os-pin.md
-  "purtera-evidence-mvp @ git+https://github.com/Purtera-IT/parser-os.git@main",
+  # v45.2 (2026-05-26): pinned to immutable tag so `pip install` is reproducible
+  # and reviewers can audit exactly which parser-os ships.  Bump this with each
+  # parser-os release.  See docs/decisions/0001-parser-os-pin.md.
+  "purtera-evidence-mvp @ git+https://github.com/Purtera-IT/parser-os.git@v45.2",
   "azure-identity>=1.15",
   "azure-storage-blob>=12.19",
   "fastapi>=0.110",
