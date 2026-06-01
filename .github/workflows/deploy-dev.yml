@@ -111,15 +111,20 @@ jobs:
 
       - name: Verify deployed SHA
         run: |
-          sleep 15
-          DEPLOYED=$(curl -sS \
-            "https://parser-os-service-dev-eus2.whitehill-a3348ba5.eastus2.azurecontainerapps.io/v1/version" \
-            | python -c "import json,sys; print(json.load(sys.stdin).get('parser_os_sha','missing'))")
+          # New Container App revision needs time to come fully online — poll up to 4 min
+          # instead of a flat 15s sleep so verification doesn't race the revision swap.
           EXPECTED="${{ steps.pos.outputs.sha }}"
-          echo "Expected: $EXPECTED"
-          echo "Deployed: $DEPLOYED"
-          if [[ "$DEPLOYED" != "$EXPECTED" ]]; then
-            echo "::error::Deployed SHA does not match expected"
-            exit 1
-          fi
-          echo "SHA verified."
+          DEPLOYED=""
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            sleep 20
+            DEPLOYED=$(curl -sS \
+              "https://parser-os-service-dev-eus2.whitehill-a3348ba5.eastus2.azurecontainerapps.io/v1/version" \
+              | python -c "import json,sys; print(json.load(sys.stdin).get('parser_os_sha','missing'))" 2>/dev/null || echo "missing")
+            echo "  attempt $i — deployed: $DEPLOYED"
+            if [[ "$DEPLOYED" == "$EXPECTED" ]]; then
+              echo "SHA verified after ${i} polls."
+              exit 0
+            fi
+          done
+          echo "::error::Deployed SHA ($DEPLOYED) does not match expected ($EXPECTED) after 4 min of polling"
+          exit 1
