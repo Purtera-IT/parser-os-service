@@ -46,11 +46,14 @@ jobs:
 
       - name: Determine parser-os ref
         id: pos
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
           REF="${{ github.event.inputs.parser_os_ref || 'v45.2' }}"
           echo "ref=$REF" >> $GITHUB_OUTPUT
-          # Resolve to a concrete SHA so the image label is honest
-          SHA=$(git ls-remote ${{ env.PARSER_OS_REPO }} "$REF" | awk '{print $1}' | head -n 1)
+          # parser-os is private — auth via GH_REPO_TOKEN against an x-access-token URL.
+          AUTHED_URL="https://x-access-token:${GH_TOKEN}@github.com/Purtera-IT/parser-os.git"
+          SHA=$(git ls-remote "$AUTHED_URL" "$REF" | awk '{print $1}' | head -n 1)
           if [[ -z "$SHA" && "$REF" =~ ^[a-f0-9]{7,40}$ ]]; then
             SHA="$REF"
           fi
@@ -61,8 +64,11 @@ jobs:
           echo "Resolved $REF → $SHA"
 
       - name: Checkout parser-os at resolved SHA
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
-          git clone --depth 1 ${{ env.PARSER_OS_REPO }} parser-os
+          AUTHED_URL="https://x-access-token:${GH_TOKEN}@github.com/Purtera-IT/parser-os.git"
+          git clone --depth 1 "$AUTHED_URL" parser-os
           git -C parser-os fetch origin ${{ steps.pos.outputs.sha }}
           git -C parser-os checkout ${{ steps.pos.outputs.sha }}
 
