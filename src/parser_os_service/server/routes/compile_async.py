@@ -39,6 +39,13 @@ ACCOUNT_NAME = os.environ.get("AZURE_STORAGE_ACCOUNT", "purpulsedevstg01")
 QUEUE_NAME = os.environ.get(
     "PARSER_OS_COMPILE_QUEUE", "parser-os-compile-jobs"
 )
+# v59: interactive re-parses default to the PRIORITY queue, which the worker
+# drains first — so a UI Re-parse never waits behind a bulk/batch backlog. Bulk
+# callers MUST pass priority=false to take the normal lane (else they'd flood the
+# fast lane and re-create the starvation problem).
+PRIORITY_QUEUE_NAME = os.environ.get(
+    "PARSER_OS_COMPILE_QUEUE_PRIORITY", "parser-os-compile-jobs-priority"
+)
 BLOB_CONTAINER = os.environ.get(
     "AZURE_STORAGE_BLOB_CONTAINER", "orbitbrief-artifacts"
 )
@@ -55,7 +62,7 @@ _queue_service: QueueServiceClient | None = None
 _blob_service: BlobServiceClient | None = None
 
 
-def _get_queue_client():
+def _get_queue_client(queue_name: str = QUEUE_NAME):
     global _cred, _queue_service
     if _queue_service is None:
         if CONNECTION_STRING:
@@ -68,7 +75,7 @@ def _get_queue_client():
                 account_url=f"https://{ACCOUNT_NAME}.queue.core.windows.net",
                 credential=_cred,
             )
-    return _queue_service.get_queue_client(QUEUE_NAME)
+    return _queue_service.get_queue_client(queue_name)
 
 
 def _get_blob_service():
@@ -96,6 +103,10 @@ class CompileAsyncBody(BaseModel):
     manifest_blob_url: str = Field(..., min_length=1)
     domain_pack: str | None = None
     compile_options: dict[str, Any] | None = None
+    # v59: interactive re-parses default to the priority lane (worker drains it
+    # first → a UI Re-parse never waits behind a bulk backlog). Bulk/batch jobs
+    # MUST set priority=false to take the normal lane.
+    priority: bool = True
 
 
 class CompileAsyncResponse(BaseModel):
@@ -125,8 +136,9 @@ def compile_async(
     /v1/orbitbrief/rebuild-latest endpoint.  The sync one is kept for
     backward compat but will OOM-kill the container on real workloads.
     """
+    target_queue = PRIORITY_QUEUE_NAME if body.priority else QUEUE_NAME
     try:
-        queue_client = _get_queue_client()
+        queue_client = _get_queue_client(target_queue)
     except Exception as exc:
         raise HTTPException(
             status_code=503,
