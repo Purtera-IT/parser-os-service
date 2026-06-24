@@ -16,9 +16,11 @@ and poll for completion.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
@@ -94,6 +96,54 @@ def _get_blob_service():
     return _blob_service
 
 
+# ─── Change-detection (v60) ─────────────────────────────────────────────
+
+
+def _artifact_key(manifest: dict) -> str:
+    """Stable fingerprint of a deal's input artifacts — the sorted set of
+    content hashes. Identical inputs → identical key. MUST match the worker's
+    computation (parser_os_worker.main writes the record with the same key)."""
+    shas = sorted(
+        str(a.get("content_sha256") or "")
+        for a in (manifest.get("artifacts") or [])
+    )
+    return hashlib.sha256("\n".join(shas).encode("utf-8")).hexdigest()
+
+
+def _blob_container_and_path(blob_url: str) -> tuple[str, str]:
+    """Split an absolute blob URL into (container, blob_path)."""
+    parts = urlsplit(blob_url)
+    path = unquote(parts.path).lstrip("/")
+    container, _, blob_path = path.partition("/")
+    return container, blob_path
+
+
+def _unchanged_since_last_compile(deal_id: str, manifest_blob_url: str) -> str | None:
+    """Return the prior compile_id when this deal's artifacts are byte-identical
+    to the last successful compile (so the new compile would be redundant), else
+    None. Fails OPEN — any error returns None so we compile rather than wrongly
+    skip."""
+    try:
+        blob = _get_blob_service()
+        container, path = _blob_container_and_path(manifest_blob_url)
+        manifest = json.loads(
+            blob.get_blob_client(container=container, blob=path)
+            .download_blob().readall()
+        )
+        incoming = _artifact_key(manifest)
+        rec = json.loads(
+            blob.get_blob_client(
+                container=BLOB_CONTAINER,
+                blob=f"deals/{deal_id}/orbitbrief/latest/compile-idempotency.json",
+            ).download_blob().readall()
+        )
+        if rec.get("artifact_key") == incoming and rec.get("compile_id"):
+            return str(rec["compile_id"])
+    except Exception:
+        return None
+    return None
+
+
 # ─── Async enqueue ──────────────────────────────────────────────────────
 
 
@@ -107,6 +157,11 @@ class CompileAsyncBody(BaseModel):
     # first → a UI Re-parse never waits behind a bulk backlog). Bulk/batch jobs
     # MUST set priority=false to take the normal lane.
     priority: bool = True
+    # v60: when false (default), skip the compile if the deal's artifacts are
+    # byte-identical to the last successful compile (kills the ~4-hourly
+    # auto-finalize floods that re-parse unchanged deals). Set true to force a
+    # recompile regardless — e.g. re-validating all deals after a parser deploy.
+    force: bool = False
 
 
 class CompileAsyncResponse(BaseModel):
@@ -136,6 +191,25 @@ def compile_async(
     /v1/orbitbrief/rebuild-latest endpoint.  The sync one is kept for
     backward compat but will OOM-kill the container on real workloads.
     """
+    # v60: change-detection — skip a redundant compile when the deal's artifacts
+    # are byte-identical to the last successful one. This is what kills the
+    # ~4-hourly auto-finalize floods (deal_artifact_finalize re-compiling unchanged
+    # deals). Returns the prior compile_id so the caller resolves to current
+    # results. force=true bypasses (e.g. re-validate after a parser deploy).
+    if not body.force:
+        prior = _unchanged_since_last_compile(body.deal_id, body.manifest_blob_url)
+        if prior is not None:
+            return CompileAsyncResponse(
+                compile_id=prior,
+                deal_id=body.deal_id,
+                status="skipped_unchanged",
+                status_url=f"/v1/compile/status/{prior}",
+                message=(
+                    "Artifacts unchanged since the last compile — skipped "
+                    "(results are current). Pass force=true to recompile."
+                ),
+            )
+
     target_queue = PRIORITY_QUEUE_NAME if body.priority else QUEUE_NAME
     try:
         queue_client = _get_queue_client(target_queue)
