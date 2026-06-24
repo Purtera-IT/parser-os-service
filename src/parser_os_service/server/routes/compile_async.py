@@ -157,11 +157,14 @@ class CompileAsyncBody(BaseModel):
     # first → a UI Re-parse never waits behind a bulk backlog). Bulk/batch jobs
     # MUST set priority=false to take the normal lane.
     priority: bool = True
-    # v60: when false (default), skip the compile if the deal's artifacts are
-    # byte-identical to the last successful compile (kills the ~4-hourly
-    # auto-finalize floods that re-parse unchanged deals). Set true to force a
-    # recompile regardless — e.g. re-validating all deals after a parser deploy.
-    force: bool = False
+    force: bool = False  # back-compat alias; force=true always runs (never skips)
+    # v60.1: change-detection (skip when artifacts are unchanged) is now OPT-IN.
+    # A manual UI Re-parse — and any default caller — ALWAYS runs and repopulates,
+    # because a deliberate Re-parse click that silently does nothing is worse than
+    # a redundant compile. Bulk/batch tooling can set skip_if_unchanged=true to
+    # dedup unchanged deals. (The ~4-hourly auto-finalize floods are killed at the
+    # source instead, by disabling ORBITBRIEF_AUTO_CORE_COMPILE on the PM API.)
+    skip_if_unchanged: bool = False
 
 
 class CompileAsyncResponse(BaseModel):
@@ -191,12 +194,10 @@ def compile_async(
     /v1/orbitbrief/rebuild-latest endpoint.  The sync one is kept for
     backward compat but will OOM-kill the container on real workloads.
     """
-    # v60: change-detection — skip a redundant compile when the deal's artifacts
-    # are byte-identical to the last successful one. This is what kills the
-    # ~4-hourly auto-finalize floods (deal_artifact_finalize re-compiling unchanged
-    # deals). Returns the prior compile_id so the caller resolves to current
-    # results. force=true bypasses (e.g. re-validate after a parser deploy).
-    if not body.force:
+    # v60.1: change-detection is OPT-IN — only skip when the caller explicitly asks
+    # (bulk tools), never for a default/manual Re-parse (which must always run and
+    # repopulate). force=true also bypasses.
+    if body.skip_if_unchanged and not body.force:
         prior = _unchanged_since_last_compile(body.deal_id, body.manifest_blob_url)
         if prior is not None:
             return CompileAsyncResponse(
