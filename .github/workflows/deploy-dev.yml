@@ -88,6 +88,7 @@ jobs:
             --file parser-os-service/Dockerfile \
             --build-arg "GIT_SHA=${{ steps.pos.outputs.sha }}" \
             --build-arg "BUILD_LABEL=${{ steps.pos.outputs.ref }}" \
+            --build-arg "CACHEBUST=${{ github.sha }}-${{ steps.pos.outputs.sha }}" \
             --no-format \
             .
 

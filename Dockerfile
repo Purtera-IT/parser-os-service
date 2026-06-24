@@ -34,6 +34,13 @@ FROM python:3.11-slim AS runtime
 RUN useradd -m -u 10001 parseros
 WORKDIR /build
 
+# v60.2: bust the COPY/install cache every deploy so an unchanged parser-os ref
+# (e.g. feat/clean-rubric-heads HEAD) still re-COPYs fresh source. Without this
+# the `COPY parser-os` layer cached and /v1/version reported a STALE parser_os_sha,
+# failing the deploy's verify step (mirrors the parser-os-worker CACHEBUST fix).
+ARG CACHEBUST=unknown
+RUN echo "cachebust=$CACHEBUST"
+
 COPY parser-os ./parser-os
 COPY parser-os-service ./parser-os-service
 
