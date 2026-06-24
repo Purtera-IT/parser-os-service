@@ -229,6 +229,10 @@ def compile_async(
         msg["domain_pack"] = body.domain_pack
     if body.compile_options:
         msg["compile_options"] = body.compile_options
+    # v61: carry force into the message so parser-os-worker's change-detection
+    # bypasses for a deliberate re-parse (the timer-driven floods never set it).
+    if body.force:
+        msg["force"] = True
 
     try:
         queue_client.send_message(json.dumps(msg))
