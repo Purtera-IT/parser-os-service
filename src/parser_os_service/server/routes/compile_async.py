@@ -194,10 +194,11 @@ def compile_async(
     /v1/orbitbrief/rebuild-latest endpoint.  The sync one is kept for
     backward compat but will OOM-kill the container on real workloads.
     """
-    # v60.1: change-detection is OPT-IN — only skip when the caller explicitly asks
-    # (bulk tools), never for a default/manual Re-parse (which must always run and
-    # repopulate). force=true also bypasses.
-    if body.skip_if_unchanged and not body.force:
+    # v62: change-detection is ON BY DEFAULT — per product rule, a compile runs ONLY
+    # when the deal is new (no prior) or its documents changed. An unchanged deal
+    # (any caller, incl. a manual Re-parse) resolves to the current results without
+    # re-running. force=true bypasses (re-validate after a parser change).
+    if not body.force:
         prior = _unchanged_since_last_compile(body.deal_id, body.manifest_blob_url)
         if prior is not None:
             return CompileAsyncResponse(
