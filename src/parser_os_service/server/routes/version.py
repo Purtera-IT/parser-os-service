@@ -57,15 +57,27 @@ def version_endpoint() -> dict[str, Any]:
     orbitbrief_core_dir = _orbitbrief_core_module_path()
     service_dir = Path(__file__).resolve().parents[4]
 
+    # Build-stamp envs are authoritative in the container (the installed
+    # parser-os has no .git, so _git_sha() returns None there). The Dockerfile
+    # stamps PARSER_OS_SHA=$GIT_SHA at build time; prefer it so /v1/version
+    # reports the ACTUAL bundled commit and the deploy's "Verify deployed SHA"
+    # step can trust it. _git_sha() is the dev-checkout fallback; the legacy
+    # *_BUILD_SHA names are kept last for backward compat. (Root cause of the
+    # chronic verify failure: the route read PARSER_OS_BUILD_SHA — a name the
+    # Dockerfile never set — and a stale container-app PARSER_OS_BUILD_SHA env
+    # pinned the report to an ancient SHA regardless of what shipped.)
     info: dict[str, Any] = {
         "service": "parser-os-service",
-        "service_sha": _git_sha(service_dir)
+        "service_sha": os.environ.get("PARSER_OS_SERVICE_SHA")
+            or _git_sha(service_dir)
             or os.environ.get("PARSER_OS_SERVICE_BUILD_SHA")
             or "unknown",
-        "parser_os_sha": _git_sha(parser_os_dir)
+        "parser_os_sha": os.environ.get("PARSER_OS_SHA")
+            or _git_sha(parser_os_dir)
             or os.environ.get("PARSER_OS_BUILD_SHA")
             or "unknown",
-        "orbitbrief_core_sha": _git_sha(orbitbrief_core_dir)
+        "orbitbrief_core_sha": os.environ.get("ORBITBRIEF_CORE_SHA")
+            or _git_sha(orbitbrief_core_dir)
             or os.environ.get("ORBITBRIEF_CORE_BUILD_SHA")
             or "unknown",
     }
