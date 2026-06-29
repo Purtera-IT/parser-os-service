@@ -34,3 +34,14 @@ app.include_router(compile_async.router)
 app.include_router(jobs.router)
 app.include_router(orbitbrief_latest.router)
 app.include_router(version.router)
+
+# PM correction loop: mount parser-os's feedback router (parser-os installs as the
+# top-level `app` package). Exposes /projects/:id/feedback/{rule,complaint,correction}
+# so the in-brief CorrectionChip → Azure Function → here → FeedbackStore loop closes.
+# Best-effort: never let the feedback router break service startup.
+try:
+    from app.api.routes_feedback import router as _parser_os_feedback_router
+
+    app.include_router(_parser_os_feedback_router)
+except Exception:  # pragma: no cover - feedback loop is additive, never fatal
+    pass
