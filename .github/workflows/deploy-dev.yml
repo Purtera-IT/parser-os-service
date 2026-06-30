@@ -17,9 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       parser_os_ref:
-        description: parser-os ref to build against (default feat/clean-rubric-heads)
+        description: parser-os ref to build against (default main)
         required: false
-        default: feat/clean-rubric-heads
+        default: main
 
 permissions:
   id-token: write   # OIDC
@@ -49,7 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
         run: |
-          REF="${{ github.event.inputs.parser_os_ref || 'feat/clean-rubric-heads' }}"
+          REF="${{ github.event.inputs.parser_os_ref || 'main' }}"
           echo "ref=$REF" >> $GITHUB_OUTPUT
           # parser-os is private — auth via GH_REPO_TOKEN against an x-access-token URL.
           AUTHED_URL="https://x-access-token:${GH_TOKEN}@github.com/Purtera-IT/parser-os.git"
