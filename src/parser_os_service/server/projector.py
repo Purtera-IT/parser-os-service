@@ -436,6 +436,16 @@ def to_scope_process_v1(
 
     scope["selectedArtifacts"] = _selected_artifacts(manifest)
 
+    # OrbitBrief v2: carry human scope decisions (`resolutions[]`) forward across
+    # recompiles. These are frontend-authored, append-only UI state (PATCHed onto
+    # `scope_process_v1.resolutions`), not compile output, so a fresh projection
+    # must never discard them. The generic prior deep-merge above already carries
+    # unknown prior-only keys, but we set this explicitly so the contract holds
+    # regardless of future template/merge changes.
+    prior_resolutions = prior_dict.get("resolutions")
+    if isinstance(prior_resolutions, list):
+        scope["resolutions"] = copy.deepcopy(prior_resolutions)
+
     return scope
 
 
