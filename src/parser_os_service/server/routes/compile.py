@@ -199,7 +199,9 @@ def compile_endpoint(
         shutil.rmtree(work, ignore_errors=True)
         art_dir.mkdir(parents=True, exist_ok=True)
 
-        arts = manifest.get("artifacts") or []
+        from app.core.manifest_artifact_dedup import dedupe_manifest_email_artifacts
+
+        arts = dedupe_manifest_email_artifacts(manifest.get("artifacts") or [])
         if not isinstance(arts, list) or not arts:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="manifest has no artifacts")
 
