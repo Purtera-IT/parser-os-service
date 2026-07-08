@@ -44,7 +44,7 @@ jobs:
         with:
           path: parser-os-service
 
-      - name: Determine parser-os ref
+      - name: Checkout parser-os at ref
         id: pos
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
@@ -52,35 +52,16 @@ jobs:
           REF="${{ github.event.inputs.parser_os_ref || 'main' }}"
           echo "ref=$REF" >> $GITHUB_OUTPUT
           # parser-os is private — auth via GH_REPO_TOKEN against an x-access-token URL.
+          # Full clone + checkout (not shallow fetch-by-SHA): agents often pass short SHAs
+          # like 155842f; `git fetch origin <short-sha>` fails with "couldn't find remote ref".
           AUTHED_URL="https://x-access-token:${GH_TOKEN}@github.com/Purtera-IT/parser-os.git"
-          SHA=$(git ls-remote "$AUTHED_URL" "$REF" | awk '{print $1}' | head -n 1)
-          if [[ -z "$SHA" && "$REF" =~ ^[a-f0-9]{7,40}$ ]]; then
-            # ls-remote cannot resolve bare SHAs — prefix-match remote tips (same as build_image.sh).
-            mapfile -t MATCHES < <(git ls-remote "$AUTHED_URL" | awk -v p="$REF" '$1 ~ "^" p {print $1}')
-            if [[ ${#MATCHES[@]} -eq 1 ]]; then
-              SHA="${MATCHES[0]}"
-            elif [[ ${#MATCHES[@]} -gt 1 ]]; then
-              echo "::error::Ambiguous short SHA prefix '$REF' (${#MATCHES[@]} matches)"; exit 1
-            fi
+          git clone "$AUTHED_URL" parser-os
+          if ! git -C parser-os checkout "$REF"; then
+            echo "::error::Could not checkout parser-os ref '$REF'"; exit 1
           fi
-          if [[ -z "$SHA" ]]; then
-            echo "::error::Could not resolve parser-os ref '$REF'"; exit 1
-          fi
+          SHA=$(git -C parser-os rev-parse HEAD)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "Resolved $REF → $SHA"
-
-      - name: Checkout parser-os at resolved SHA
-        env:
-          GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
-        run: |
-          AUTHED_URL="https://x-access-token:${GH_TOKEN}@github.com/Purtera-IT/parser-os.git"
-          # Full clone + checkout — shallow fetch by SHA fails for short prefixes (build_image.sh pattern).
-          git clone "$AUTHED_URL" parser-os
-          git -C parser-os checkout "${{ steps.pos.outputs.sha }}"
-          ACTUAL=$(git -C parser-os rev-parse HEAD)
-          if [[ "$ACTUAL" != "${{ steps.pos.outputs.sha }}" ]]; then
-            echo "::error::Checked-out SHA $ACTUAL != resolved ${{ steps.pos.outputs.sha }}"; exit 1
-          fi
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
