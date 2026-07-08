@@ -192,3 +192,49 @@ def test_sow_handoff_contract_after_projector_with_prior(scope_fixture_path: Pat
     }
     got = to_scope_process_v1(cr, manifest, "https://example.blob.core.windows.net/c/manifest.json", prior=template)
     validate_sow_handoff_contract(got["sowHandoff"])
+
+
+def _resolutions_fixture() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "gap:wireless.ap_count:wireless",
+            "kind": "resolve",
+            "decision": "Use 52 (survey)",
+            "note": "survey verified",
+            "actor": {"id": "u", "name": "J. Rivera", "email": ""},
+            "at": "2026-07-08T10:00:00Z",
+            "basedOnCompileId": "cmp_1",
+        }
+    ]
+
+
+def test_resolutions_carried_forward_via_prior_param() -> None:
+    # OrbitBrief v2: human scope decisions on `resolutions[]` must survive a fresh
+    # projection (recompile) — they are frontend UI state, not compile output.
+    resolutions = _resolutions_fixture()
+    cr = CompileResult(project_id="p", atoms=[_atom("a1", AuthorityClass.contractual_scope)], entities=[], edges=[], packets=[])
+    manifest: dict[str, Any] = {"artifacts": [{"attachment_id": "x1", "filename": "a.xlsx", "blob_url": "https://example.blob.core.windows.net/c/a.xlsx"}]}
+    prior = {"version": "scope_process_v1", "resolutions": resolutions}
+    scope = to_scope_process_v1(cr, manifest, "https://example.blob.core.windows.net/c/manifest.json", prior=prior)
+    assert scope.get("resolutions") == resolutions
+    # compile-derived fields are still refreshed, not frozen by prior
+    assert scope["version"] == "scope_process_v1"
+
+
+def test_resolutions_carried_forward_via_manifest_context() -> None:
+    # Production path: Platform-infra passes prior scope on manifest.context.
+    resolutions = _resolutions_fixture()
+    cr = CompileResult(project_id="p", atoms=[_atom("a1", AuthorityClass.contractual_scope)], entities=[], edges=[], packets=[])
+    manifest: dict[str, Any] = {
+        "artifacts": [{"attachment_id": "x1", "filename": "a.xlsx", "blob_url": "https://example.blob.core.windows.net/c/a.xlsx"}],
+        "context": {"prior_scope_process_v1": {"version": "scope_process_v1", "resolutions": resolutions}},
+    }
+    scope = to_scope_process_v1(cr, manifest, "https://example.blob.core.windows.net/c/manifest.json")
+    assert scope.get("resolutions") == resolutions
+
+
+def test_no_resolutions_invented_without_prior() -> None:
+    cr = CompileResult(project_id="p", atoms=[_atom("a1", AuthorityClass.contractual_scope)], entities=[], edges=[], packets=[])
+    manifest: dict[str, Any] = {"artifacts": [{"attachment_id": "x1", "filename": "a.xlsx", "blob_url": "https://example.blob.core.windows.net/c/a.xlsx"}]}
+    scope = to_scope_process_v1(cr, manifest, "https://example.blob.core.windows.net/c/manifest.json")
+    assert "resolutions" not in scope or scope["resolutions"] in ([], None)
