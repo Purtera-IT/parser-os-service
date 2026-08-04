@@ -375,6 +375,27 @@ def _finished_at_iso(result: CompileResult) -> str:
     return "1970-01-01T00:00:00Z"
 
 
+def _dict_slot(container: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return ``container[key]`` as a dict, replacing a non-dict value in place.
+
+    ``scope`` is the resource-scope template deep-merged with the PRIOR
+    scope_process_v1 the manifest carries. A prior legitimately stores
+    ``"sowHandoff": null`` for a deal that has not reached SOW yet, and
+    ``setdefault`` hands that ``None`` straight back because the key exists.
+    Asserting on it aborted the entire compile at the projection step — after
+    every parse, enrich, graph and packet stage had already run (~40 min of
+    work thrown away, and no envelope written).
+
+    A null slot means "no prior content for this section", which is exactly
+    what an empty dict expresses. Start fresh and carry on.
+    """
+    value = container.get(key)
+    if not isinstance(value, dict):
+        value = {}
+        container[key] = value
+    return value
+
+
 def to_scope_process_v1(
     result: CompileResult,
     manifest: Mapping[str, Any],
@@ -399,8 +420,7 @@ def to_scope_process_v1(
     scope["lastIngestAt"] = finished
     scope["lastIngestSource"] = "bang-compile"
 
-    sh = scope.setdefault("sowHandoff", {})
-    assert isinstance(sh, dict)
+    sh = _dict_slot(scope, "sowHandoff")
     sh["scope_in"] = [_packet_to_row(p) for p in _packets_by_family(result, PacketFamily.scope_inclusion)]
     sh["scope_out"] = [_packet_to_row(p) for p in _packets_by_family(result, PacketFamily.scope_exclusion)]
     sh["assumptions"] = [
@@ -412,26 +432,22 @@ def to_scope_process_v1(
     sh["decisions"] = [_packet_to_row(p) for p in _packets_by_family(result, PacketFamily.meeting_decision)]
     sh["action_items"] = [_packet_to_row(p) for p in _packets_by_family(result, PacketFamily.action_item)]
 
-    pn = scope.setdefault("projectNeeds", {})
-    assert isinstance(pn, dict)
+    pn = _dict_slot(scope, "projectNeeds")
     pn["active_domains"] = _active_domains_from_packets(result)
     pn["site_list"] = _site_list(result)
     pn["notes"] = _project_needs_notes(result, manifest)
 
     scope["sowReadiness"] = _sow_readiness(result)
 
-    er = scope.setdefault("extractedReview", {})
-    assert isinstance(er, dict)
+    er = _dict_slot(scope, "extractedReview")
     er["contradictions"] = _contradictions_packets(result)
 
-    oa = scope.setdefault("orbitbriefAudit", {})
-    assert isinstance(oa, dict)
+    oa = _dict_slot(scope, "orbitbriefAudit")
     oa["evidenceMap"] = _evidence_map(result)
     oa["confidence"] = _confidence_block(result)
     oa["missing"] = [p.reason for p in _packets_by_family(result, PacketFamily.missing_info)]
     oa["reasonMap"] = _reason_map(result)
-    archive = oa.setdefault("artifactArchive", {})
-    assert isinstance(archive, dict)
+    archive = _dict_slot(oa, "artifactArchive")
     archive["manifestBlobUrl"] = manifest_blob_url
 
     scope["selectedArtifacts"] = _selected_artifacts(manifest)
