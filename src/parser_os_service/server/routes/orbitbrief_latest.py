@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -141,12 +142,24 @@ def orbitbrief_rebuild_latest_endpoint(
             detail="manifest must include deal_id and compile_id",
         )
 
-    work = Path(f"/tmp/parser-os/orbitbrief-{compile_id}").resolve()
+    # The working directory must be unique per REQUEST, not per compile.
+    #
+    # It used to be /tmp/parser-os/orbitbrief-{compile_id}, wiped with rmtree on
+    # entry. Two rebuilds of the same deal arriving together therefore deleted
+    # each other's downloaded artifacts mid-flight, and the loser died with
+    # FileNotFoundError on a file it had just written -- a 500 whose message
+    # pointed at the artifact rather than at the collision. Retrying "fixed" it,
+    # which is how it survived: the failure only appears under concurrency.
+    #
+    # A per-request suffix removes the shared name entirely. The directory is
+    # still removed in the finally block, so nothing accumulates.
+    work = Path(
+        f"/tmp/parser-os/orbitbrief-{compile_id}-{uuid.uuid4().hex[:12]}"
+    ).resolve()
     art_dir = work / "artifacts"
     local_root = os.environ.get("PARSER_OS_SERVICE_LOCAL_BLOB_ROOT", "").strip()
 
     try:
-        shutil.rmtree(work, ignore_errors=True)
         art_dir.mkdir(parents=True, exist_ok=True)
 
         from app.core.manifest_artifact_dedup import dedupe_manifest_email_artifacts
