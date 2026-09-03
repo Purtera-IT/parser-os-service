@@ -137,11 +137,32 @@ def _unchanged_since_last_compile(deal_id: str, manifest_blob_url: str) -> str |
                 blob=f"deals/{deal_id}/orbitbrief/latest/compile-idempotency.json",
             ).download_blob().readall()
         )
-        if rec.get("artifact_key") == incoming and rec.get("compile_id"):
+        # Keyed on the RUN SCOPE too, not the artifact set alone. A cut compile
+        # (documents up to a date) and a full one are different products of the
+        # same deal; comparing only artifact_key let each stand in for the other.
+        # After a cut compile, an explicit "All data" request on a deal whose
+        # full corpus equals the cut set was skipped as "unchanged" and handed
+        # back the cut -- the user's choice silently ignored. And because this
+        # check runs BEFORE anything is queued, the worker's own scope-aware
+        # idempotency never saw the request. The worker writes `as_of` into the
+        # record; the manifest carries the requested scope in context.as_of.
+        # A record with no as_of (legacy) matches a full run only.
+        rec_scope = _norm_scope(rec.get("as_of"))
+        want_scope = _norm_scope((manifest.get("context") or {}).get("as_of"))
+        if (
+            rec.get("artifact_key") == incoming
+            and rec.get("compile_id")
+            and rec_scope == want_scope
+        ):
             return str(rec["compile_id"])
     except Exception:
         return None
     return None
+
+
+def _norm_scope(v: object) -> str | None:
+    s = str(v).strip() if v is not None else ""
+    return s or None
 
 
 # ─── Async enqueue ──────────────────────────────────────────────────────
