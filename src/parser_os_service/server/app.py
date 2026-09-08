@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 
 from collections.abc import AsyncGenerator
@@ -17,6 +20,42 @@ from parser_os_service.server.routes import (
     orbitbrief_latest,
     version,
 )
+
+
+def _configure_logging() -> None:
+    """Let the compile speak.
+
+    This service runs the parser-os compile, and nothing here ever configured
+    logging — so the root logger sat at WARNING with no handler and every
+    `logging.getLogger("app.core.…")` line the pipeline emits went nowhere.
+    From outside, a stage that ran and a stage that was switched off looked
+    identical, which is exactly how a fusion pass stayed disabled through six
+    attempts to fix what it was doing.
+
+    stdout, because that is what the container log stream reads. Level is
+    tunable via PARSER_OS_LOG_LEVEL; INFO by default, which is where the
+    pipeline's own stage lines are written.
+
+    Uvicorn configures its own loggers and leaves the root alone, so this adds
+    a handler rather than replacing anything, and does nothing if one is
+    already installed (a test harness, or a host that configured logging
+    first).
+    """
+    root = logging.getLogger()
+    level = getattr(
+        logging, os.environ.get("PARSER_OS_LOG_LEVEL", "INFO").strip().upper(), logging.INFO
+    )
+    root.setLevel(level)
+    if any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+        return
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    )
+    root.addHandler(handler)
+
+
+_configure_logging()
 
 
 @asynccontextmanager
