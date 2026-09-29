@@ -165,18 +165,10 @@ def _norm_scope(v: object) -> str | None:
     return s or None
 
 
-#: Trigger kinds that mean a person is waiting for this compile.
+#: Trigger kinds that mean a person is waiting. Recorded on the queue
+#: message for the UI; no longer used to choose a queue.
 _MANUAL_KINDS = {"manual", "reparse", "ui", "interactive"}
 
-#: Kinds that cannot yet be told apart, and so keep the lane they have today.
-#:
-#: `deal_artifact_finalize` is what EVERY caller sends right now -- the UI
-#: Re-parse button and the four-hourly timer alike. Routing it to the bulk lane
-#: on the strength of its name would put a waiting person behind a backlog and
-#: call that a fix. It stays interactive until the callers say which they are;
-#: the moment the UI stamps "manual" and the timers stamp "timer", this set is
-#: deleted and the split becomes real.
-_AMBIGUOUS_LEGACY_KINDS = {"deal_artifact_finalize", ""}
 
 
 def _trigger_kind(body: "CompileAsyncBody") -> str:
@@ -210,25 +202,21 @@ class CompileAsyncBody(BaseModel):
     manifest_blob_url: str = Field(..., min_length=1)
     domain_pack: str | None = None
     compile_options: dict[str, Any] | None = None
-    # Who asked for this compile, and why. The lane is DERIVED from it below.
+    # Who asked for this compile, and why. RECORDED, not routed.
     #
     # Every compile has always arrived carrying trigger.kind
-    # "deal_artifact_finalize" — a manual Re-parse click and a four-hourly timer
-    # were literally the same message. So nothing could count them, gate on
-    # them, or tell them apart in the queue, and "random parses keep appearing"
-    # stayed a feeling rather than a number.
+    # "deal_artifact_finalize" -- a manual Re-parse click and a four-hourly
+    # timer were literally the same message. So nothing could count them or tell
+    # them apart in the queue, and "random parses keep appearing" stayed a
+    # feeling rather than a number. This is what makes it a number.
     #
-    #   manual                    -> priority lane  (a person is waiting)
-    #   timer / backfill / other  -> bulk lane      (nobody is waiting)
-    #
-    # Anything unrecognised takes the bulk lane: a caller that does not say it
-    # is interactive is not.
+    #   {"kind": "manual", "by": "griffin"}   {"kind": "timer"}
     trigger: dict[str, Any] | None = None
 
-    # DEPRECATED — honoured only when `trigger` is absent, so callers outside
-    # these repos keep working. It defaulted to True, which is why timer floods
-    # have been landing in the FAST lane and starving the interactive re-parses
-    # that lane exists to protect.
+    # DEPRECATED and now inert. It selected the priority queue, which no longer
+    # exists as a separate lane; it is still accepted so callers outside these
+    # repos keep working, and is only read to infer a trigger kind when none is
+    # given.
     priority: bool | None = None
     force: bool = False  # back-compat alias; force=true always runs (never skips)
     # v60.1: change-detection (skip when artifacts are unchanged) is now OPT-IN.
@@ -285,9 +273,17 @@ def compile_async(
                 ),
             )
 
+    # ONE queue. The priority lane existed to stop a four-hourly timer flood
+    # starving an interactive re-parse on a worker that had a SINGLE slot -- the
+    # worker's own comment calls it "the '40 deals queued, my reparse hangs'
+    # problem". Both causes are gone: the worker runs four slots, and the timers
+    # that produced the flood are being switched off at the source.
+    #
+    # A standing fast lane that silently reorders work is harder to reason about
+    # than a queue that does not. Jumping the line stays possible and stays
+    # visible: it is an explicit bump in the queue UI, not a structural default.
     lane_kind = _trigger_kind(body)
-    interactive = lane_kind in _MANUAL_KINDS or lane_kind in _AMBIGUOUS_LEGACY_KINDS
-    target_queue = PRIORITY_QUEUE_NAME if interactive else QUEUE_NAME
+    target_queue = QUEUE_NAME
     try:
         queue_client = _get_queue_client(target_queue)
     except Exception as exc:
@@ -307,7 +303,6 @@ def compile_async(
         "trigger": {
             "kind": lane_kind,
             "by": str((body.trigger or {}).get("by") or ""),
-            "lane": "priority" if interactive else "bulk",
         },
     }
     if body.domain_pack:

@@ -16,7 +16,6 @@ from parser_os_service.server.routes import (
     compile,
     compile_async,
     health,
-    jobs,
     orbitbrief_latest,
     version,
 )
@@ -68,30 +67,36 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(title="parser-os-service", version="0.1.0", lifespan=lifespan)
 app.include_router(health.router)
 
-# The synchronous POST /v1/compile is OFF by default.
+# BOTH synchronous compile routes are OFF by default.
 #
-# It runs a whole compile inside this container: no queue, no worker, no slot,
-# no per-deal budget, and none of the status records the queue UI reads. So the
-# same deal could be compiled two ways, in two environments, under two timeout
-# regimes, and a result would depend on which door it came through. Its own
-# docstring already warned that it "will OOM-kill the container on real
-# workloads".
+# There were three ways to compile a deal. Two of them run the whole thing
+# inside this container: no queue, no worker, no slot, no per-deal budget, no
+# change-detection, and none of the status records the queue UI reads.
+#
+#   POST /v1/compile                    sync, in-process
+#   POST /v1/orbitbrief/rebuild-latest  sync, in-process
+#   POST /v1/compile/async              queue -> parser-os-worker   <- the one
+#
+# `rebuild-latest` is the one `compile_async`'s own docstring warns about by
+# name: it "will OOM-kill the container on real workloads". Worse, it calls
+# `_run_compile_project()` and then writes `orbitbrief/latest/envelope.json` --
+# the same blob the worker writes. Two writers, one file, no coordination, so a
+# sync request and a queued compile racing on one deal is last-write-wins.
 #
 # One way to start a compile, or the pipeline cannot be said to do the same
 # thing every time.
 #
 # Gated rather than deleted: a caller outside these repos may still reach for
-# it, PARSER_OS_ENABLE_SYNC_COMPILE=1 brings it back in one variable, and a 404
-# in the meantime names that caller instead of hiding it.
+# them, PARSER_OS_ENABLE_SYNC_COMPILE=1 brings both back in one variable, and a
+# 404 in the meantime names that caller instead of hiding it.
 if os.environ.get("PARSER_OS_ENABLE_SYNC_COMPILE", "").strip().lower() in (
     "1", "true", "yes", "on",
 ):
     app.include_router(compile.router)
+    app.include_router(orbitbrief_latest.router)
 
 # v45.2: async compile path (enqueue-and-poll, runs in parser-os-worker)
 app.include_router(compile_async.router)
-app.include_router(jobs.router)
-app.include_router(orbitbrief_latest.router)
 app.include_router(version.router)
 
 # PM correction loop: mount parser-os's feedback router (parser-os installs as the
