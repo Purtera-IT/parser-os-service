@@ -67,7 +67,27 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="parser-os-service", version="0.1.0", lifespan=lifespan)
 app.include_router(health.router)
-app.include_router(compile.router)
+
+# The synchronous POST /v1/compile is OFF by default.
+#
+# It runs a whole compile inside this container: no queue, no worker, no slot,
+# no per-deal budget, and none of the status records the queue UI reads. So the
+# same deal could be compiled two ways, in two environments, under two timeout
+# regimes, and a result would depend on which door it came through. Its own
+# docstring already warned that it "will OOM-kill the container on real
+# workloads".
+#
+# One way to start a compile, or the pipeline cannot be said to do the same
+# thing every time.
+#
+# Gated rather than deleted: a caller outside these repos may still reach for
+# it, PARSER_OS_ENABLE_SYNC_COMPILE=1 brings it back in one variable, and a 404
+# in the meantime names that caller instead of hiding it.
+if os.environ.get("PARSER_OS_ENABLE_SYNC_COMPILE", "").strip().lower() in (
+    "1", "true", "yes", "on",
+):
+    app.include_router(compile.router)
+
 # v45.2: async compile path (enqueue-and-poll, runs in parser-os-worker)
 app.include_router(compile_async.router)
 app.include_router(jobs.router)

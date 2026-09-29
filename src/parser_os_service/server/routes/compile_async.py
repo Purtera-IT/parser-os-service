@@ -165,6 +165,42 @@ def _norm_scope(v: object) -> str | None:
     return s or None
 
 
+#: Trigger kinds that mean a person is waiting for this compile.
+_MANUAL_KINDS = {"manual", "reparse", "ui", "interactive"}
+
+#: Kinds that cannot yet be told apart, and so keep the lane they have today.
+#:
+#: `deal_artifact_finalize` is what EVERY caller sends right now -- the UI
+#: Re-parse button and the four-hourly timer alike. Routing it to the bulk lane
+#: on the strength of its name would put a waiting person behind a backlog and
+#: call that a fix. It stays interactive until the callers say which they are;
+#: the moment the UI stamps "manual" and the timers stamp "timer", this set is
+#: deleted and the split becomes real.
+_AMBIGUOUS_LEGACY_KINDS = {"deal_artifact_finalize", ""}
+
+
+def _trigger_kind(body: "CompileAsyncBody") -> str:
+    """The trigger kind this compile declared, normalised.
+
+    Falls back to the deprecated `priority` flag when no trigger is given, so a
+    caller that has not been updated keeps the lane it used to get. A caller
+    that gives neither is treated as automated — the safe default, because an
+    unannounced caller is a timer far more often than it is a person.
+    """
+    t = body.trigger or {}
+    kind = str(t.get("kind") or "").strip().lower()
+    if kind:
+        return kind
+    if body.priority is True:
+        return "manual"          # legacy caller that asked for the fast lane
+    if body.priority is False:
+        return "automated"       # legacy caller that asked for the bulk lane
+    # Nothing declared at all. `priority` used to default to True, so silence
+    # meant the fast lane; keep it there rather than quietly demoting a caller
+    # that has not been updated. "" is ambiguous-legacy, not automated.
+    return ""
+
+
 # ─── Async enqueue ──────────────────────────────────────────────────────
 
 
@@ -174,10 +210,26 @@ class CompileAsyncBody(BaseModel):
     manifest_blob_url: str = Field(..., min_length=1)
     domain_pack: str | None = None
     compile_options: dict[str, Any] | None = None
-    # v59: interactive re-parses default to the priority lane (worker drains it
-    # first → a UI Re-parse never waits behind a bulk backlog). Bulk/batch jobs
-    # MUST set priority=false to take the normal lane.
-    priority: bool = True
+    # Who asked for this compile, and why. The lane is DERIVED from it below.
+    #
+    # Every compile has always arrived carrying trigger.kind
+    # "deal_artifact_finalize" — a manual Re-parse click and a four-hourly timer
+    # were literally the same message. So nothing could count them, gate on
+    # them, or tell them apart in the queue, and "random parses keep appearing"
+    # stayed a feeling rather than a number.
+    #
+    #   manual                    -> priority lane  (a person is waiting)
+    #   timer / backfill / other  -> bulk lane      (nobody is waiting)
+    #
+    # Anything unrecognised takes the bulk lane: a caller that does not say it
+    # is interactive is not.
+    trigger: dict[str, Any] | None = None
+
+    # DEPRECATED — honoured only when `trigger` is absent, so callers outside
+    # these repos keep working. It defaulted to True, which is why timer floods
+    # have been landing in the FAST lane and starving the interactive re-parses
+    # that lane exists to protect.
+    priority: bool | None = None
     force: bool = False  # back-compat alias; force=true always runs (never skips)
     # v60.1: change-detection (skip when artifacts are unchanged) is now OPT-IN.
     # A manual UI Re-parse — and any default caller — ALWAYS runs and repopulates,
@@ -233,7 +285,9 @@ def compile_async(
                 ),
             )
 
-    target_queue = PRIORITY_QUEUE_NAME if body.priority else QUEUE_NAME
+    lane_kind = _trigger_kind(body)
+    interactive = lane_kind in _MANUAL_KINDS or lane_kind in _AMBIGUOUS_LEGACY_KINDS
+    target_queue = PRIORITY_QUEUE_NAME if interactive else QUEUE_NAME
     try:
         queue_client = _get_queue_client(target_queue)
     except Exception as exc:
@@ -246,6 +300,15 @@ def compile_async(
         "compile_id": body.compile_id,
         "deal_id": body.deal_id,
         "manifest_blob_url": body.manifest_blob_url,
+        # Carried so the worker can record it and the queue UI can show WHY a
+        # compile is running and WHO is waiting. Without this, every row in the
+        # queue looks identical and a flood is indistinguishable from work
+        # somebody asked for.
+        "trigger": {
+            "kind": lane_kind,
+            "by": str((body.trigger or {}).get("by") or ""),
+            "lane": "priority" if interactive else "bulk",
+        },
     }
     if body.domain_pack:
         msg["domain_pack"] = body.domain_pack
