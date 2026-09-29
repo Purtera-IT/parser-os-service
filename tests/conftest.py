@@ -30,4 +30,13 @@ def scope_fixture_path() -> Path:
 
 @pytest.fixture()
 def bang_internal_bearer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Call the endpoints without a token.
+
+    Clearing BANG_INTERNAL_BEARER used to be enough, because `verify_bearer`
+    failed open when no token was configured. It now fails CLOSED -- an
+    unconfigured secret is a misconfiguration, not a permission -- so a test
+    that wants an open service says so, the same way a developer running
+    locally does.
+    """
     monkeypatch.delenv("BANG_INTERNAL_BEARER", raising=False)
+    monkeypatch.setenv("PARSER_OS_ALLOW_UNAUTHENTICATED", "1")
