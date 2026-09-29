@@ -165,6 +165,34 @@ def _norm_scope(v: object) -> str | None:
     return s or None
 
 
+#: Trigger kinds that mean a person is waiting. Recorded on the queue
+#: message for the UI; no longer used to choose a queue.
+_MANUAL_KINDS = {"manual", "reparse", "ui", "interactive"}
+
+
+
+def _trigger_kind(body: "CompileAsyncBody") -> str:
+    """The trigger kind this compile declared, normalised.
+
+    Falls back to the deprecated `priority` flag when no trigger is given, so a
+    caller that has not been updated keeps the lane it used to get. A caller
+    that gives neither is treated as automated — the safe default, because an
+    unannounced caller is a timer far more often than it is a person.
+    """
+    t = body.trigger or {}
+    kind = str(t.get("kind") or "").strip().lower()
+    if kind:
+        return kind
+    if body.priority is True:
+        return "manual"          # legacy caller that asked for the fast lane
+    if body.priority is False:
+        return "automated"       # legacy caller that asked for the bulk lane
+    # Nothing declared at all. `priority` used to default to True, so silence
+    # meant the fast lane; keep it there rather than quietly demoting a caller
+    # that has not been updated. "" is ambiguous-legacy, not automated.
+    return ""
+
+
 # ─── Async enqueue ──────────────────────────────────────────────────────
 
 
@@ -174,10 +202,22 @@ class CompileAsyncBody(BaseModel):
     manifest_blob_url: str = Field(..., min_length=1)
     domain_pack: str | None = None
     compile_options: dict[str, Any] | None = None
-    # v59: interactive re-parses default to the priority lane (worker drains it
-    # first → a UI Re-parse never waits behind a bulk backlog). Bulk/batch jobs
-    # MUST set priority=false to take the normal lane.
-    priority: bool = True
+    # Who asked for this compile, and why. RECORDED, not routed.
+    #
+    # Every compile has always arrived carrying trigger.kind
+    # "deal_artifact_finalize" -- a manual Re-parse click and a four-hourly
+    # timer were literally the same message. So nothing could count them or tell
+    # them apart in the queue, and "random parses keep appearing" stayed a
+    # feeling rather than a number. This is what makes it a number.
+    #
+    #   {"kind": "manual", "by": "griffin"}   {"kind": "timer"}
+    trigger: dict[str, Any] | None = None
+
+    # DEPRECATED and now inert. It selected the priority queue, which no longer
+    # exists as a separate lane; it is still accepted so callers outside these
+    # repos keep working, and is only read to infer a trigger kind when none is
+    # given.
+    priority: bool | None = None
     force: bool = False  # back-compat alias; force=true always runs (never skips)
     # v60.1: change-detection (skip when artifacts are unchanged) is now OPT-IN.
     # A manual UI Re-parse — and any default caller — ALWAYS runs and repopulates,
@@ -233,7 +273,17 @@ def compile_async(
                 ),
             )
 
-    target_queue = PRIORITY_QUEUE_NAME if body.priority else QUEUE_NAME
+    # ONE queue. The priority lane existed to stop a four-hourly timer flood
+    # starving an interactive re-parse on a worker that had a SINGLE slot -- the
+    # worker's own comment calls it "the '40 deals queued, my reparse hangs'
+    # problem". Both causes are gone: the worker runs four slots, and the timers
+    # that produced the flood are being switched off at the source.
+    #
+    # A standing fast lane that silently reorders work is harder to reason about
+    # than a queue that does not. Jumping the line stays possible and stays
+    # visible: it is an explicit bump in the queue UI, not a structural default.
+    lane_kind = _trigger_kind(body)
+    target_queue = QUEUE_NAME
     try:
         queue_client = _get_queue_client(target_queue)
     except Exception as exc:
@@ -246,6 +296,14 @@ def compile_async(
         "compile_id": body.compile_id,
         "deal_id": body.deal_id,
         "manifest_blob_url": body.manifest_blob_url,
+        # Carried so the worker can record it and the queue UI can show WHY a
+        # compile is running and WHO is waiting. Without this, every row in the
+        # queue looks identical and a flood is indistinguishable from work
+        # somebody asked for.
+        "trigger": {
+            "kind": lane_kind,
+            "by": str((body.trigger or {}).get("by") or ""),
+        },
     }
     if body.domain_pack:
         msg["domain_pack"] = body.domain_pack
